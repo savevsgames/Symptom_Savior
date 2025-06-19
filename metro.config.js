@@ -4,7 +4,7 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Enable Node-style imports required by Supabase on Web
+// Enable Node.js polyfills for Supabase on Web
 config.resolver.extraNodeModules = {
   stream: require.resolve('readable-stream'),
   crypto: require.resolve('crypto-browserify'),
