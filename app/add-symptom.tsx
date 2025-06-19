@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ArrowLeft, Plus, X, Camera, MapPin } from 'lucide-react-native';
+import { BaseButton, BaseTextInput, BaseCard } from '@/components/ui';
+import { theme } from '@/lib/theme';
 
 export default function AddSymptom() {
   const [selectedSymptom, setSelectedSymptom] = useState('');
@@ -24,7 +26,13 @@ export default function AddSymptom() {
   ];
 
   const severityLabels = ['Minimal', 'Mild', 'Moderate', 'Severe', 'Very Severe'];
-  const severityColors = ['#10B981', '#22C55E', '#F59E0B', '#EF4444', '#DC2626'];
+  const severityColors = [
+    theme.colors.success[500],
+    theme.colors.success[400],
+    theme.colors.warning[500],
+    theme.colors.error[500],
+    theme.colors.error[600]
+  ];
 
   const addTrigger = (trigger: string) => {
     if (trigger && !triggers.includes(trigger)) {
@@ -45,7 +53,6 @@ export default function AddSymptom() {
       return;
     }
 
-    // Here you would typically save to your data store
     Alert.alert(
       'Symptom Logged',
       `Your ${symptomName.toLowerCase()} has been recorded successfully.`,
@@ -58,7 +65,7 @@ export default function AddSymptom() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ArrowLeft size={24} color="#1E293B" strokeWidth={2} />
+          <ArrowLeft size={24} color={theme.colors.text.primary} strokeWidth={2} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Log New Symptom</Text>
         <View style={styles.headerSpacer} />
@@ -66,7 +73,7 @@ export default function AddSymptom() {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Symptom Selection */}
-        <View style={styles.section}>
+        <BaseCard style={styles.section}>
           <Text style={styles.sectionTitle}>What symptom are you experiencing?</Text>
           <View style={styles.symptomGrid}>
             {commonSymptoms.map((symptom) => (
@@ -92,20 +99,18 @@ export default function AddSymptom() {
           </View>
           
           <Text style={styles.orText}>or enter a custom symptom:</Text>
-          <TextInput
-            style={styles.customInput}
+          <BaseTextInput
             placeholder="Enter symptom name..."
             value={customSymptom}
             onChangeText={(text) => {
               setCustomSymptom(text);
               if (text) setSelectedSymptom('');
             }}
-            placeholderTextColor="#94A3B8"
           />
-        </View>
+        </BaseCard>
 
         {/* Severity Selection */}
-        <View style={styles.section}>
+        <BaseCard style={styles.section}>
           <Text style={styles.sectionTitle}>How severe is this symptom?</Text>
           <View style={styles.severityContainer}>
             {severityLabels.map((label, index) => (
@@ -119,37 +124,35 @@ export default function AddSymptom() {
               >
                 <Text style={[
                   styles.severityNumber,
-                  severity === index + 1 && { color: '#FFFFFF' }
+                  severity === index + 1 && { color: theme.colors.text.inverse }
                 ]}>
                   {index + 1}
                 </Text>
                 <Text style={[
                   styles.severityLabel,
-                  severity === index + 1 && { color: '#FFFFFF' }
+                  severity === index + 1 && { color: theme.colors.text.inverse }
                 ]}>
                   {label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-        </View>
+        </BaseCard>
 
         {/* Description */}
-        <View style={styles.section}>
+        <BaseCard style={styles.section}>
           <Text style={styles.sectionTitle}>Additional Details (Optional)</Text>
-          <TextInput
-            style={styles.descriptionInput}
+          <BaseTextInput
             placeholder="Describe the symptom in more detail (location, duration, quality, etc.)"
             value={description}
             onChangeText={setDescription}
             multiline
-            numberOfLines={4}
-            placeholderTextColor="#94A3B8"
+            style={styles.descriptionInput}
           />
-        </View>
+        </BaseCard>
 
         {/* Triggers */}
-        <View style={styles.section}>
+        <BaseCard style={styles.section}>
           <Text style={styles.sectionTitle}>Possible Triggers (Optional)</Text>
           <View style={styles.triggerGrid}>
             {commonTriggers.map((trigger) => (
@@ -178,19 +181,19 @@ export default function AddSymptom() {
           </View>
 
           <View style={styles.customTriggerContainer}>
-            <TextInput
-              style={styles.customTriggerInput}
+            <BaseTextInput
               placeholder="Add custom trigger..."
               value={newTrigger}
               onChangeText={setNewTrigger}
-              placeholderTextColor="#94A3B8"
+              containerStyle={styles.customTriggerInput}
             />
-            <TouchableOpacity
-              style={styles.addTriggerButton}
+            <BaseButton
+              title=""
               onPress={() => addTrigger(newTrigger)}
-            >
-              <Plus size={20} color="#0066CC" strokeWidth={2} />
-            </TouchableOpacity>
+              variant="outline"
+              size="md"
+              style={styles.addTriggerButton}
+            />
           </View>
 
           {triggers.length > 0 && (
@@ -201,36 +204,46 @@ export default function AddSymptom() {
                   <View key={index} style={styles.selectedTriggerTag}>
                     <Text style={styles.selectedTriggerText}>{trigger}</Text>
                     <TouchableOpacity onPress={() => removeTrigger(trigger)}>
-                      <X size={16} color="#64748B" strokeWidth={2} />
+                      <X size={16} color={theme.colors.text.secondary} strokeWidth={2} />
                     </TouchableOpacity>
                   </View>
                 ))}
               </View>
             </View>
           )}
-        </View>
+        </BaseCard>
 
         {/* Additional Options */}
-        <View style={styles.section}>
+        <BaseCard style={styles.section}>
           <Text style={styles.sectionTitle}>Additional Options</Text>
           <View style={styles.optionsContainer}>
-            <TouchableOpacity style={styles.optionButton}>
-              <Camera size={20} color="#0066CC" strokeWidth={2} />
-              <Text style={styles.optionButtonText}>Add Photo</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.optionButton}>
-              <MapPin size={20} color="#0066CC" strokeWidth={2} />
-              <Text style={styles.optionButtonText}>Add Location</Text>
-            </TouchableOpacity>
+            <BaseButton
+              title="Add Photo"
+              onPress={() => {}}
+              variant="outline"
+              size="md"
+              style={styles.optionButton}
+            />
+            <BaseButton
+              title="Add Location"
+              onPress={() => {}}
+              variant="outline"
+              size="md"
+              style={styles.optionButton}
+            />
           </View>
-        </View>
+        </BaseCard>
       </ScrollView>
 
       {/* Save Button */}
       <View style={styles.saveContainer}>
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save Symptom</Text>
-        </TouchableOpacity>
+        <BaseButton
+          title="Save Symptom"
+          onPress={handleSave}
+          variant="primary"
+          size="lg"
+          fullWidth
+        />
       </View>
     </SafeAreaView>
   );
@@ -239,245 +252,222 @@ export default function AddSymptom() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: theme.colors.background.secondary,
   },
+  
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    backgroundColor: theme.colors.background.primary,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: theme.colors.border.light,
   },
+  
   backButton: {
-    padding: 8,
+    padding: theme.spacing.sm,
   },
+  
   headerTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 18,
-    color: '#1E293B',
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.text.primary,
     flex: 1,
     textAlign: 'center',
   },
+  
   headerSpacer: {
     width: 40,
   },
+  
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing['2xl'],
   },
+  
   section: {
-    marginTop: 24,
+    marginTop: theme.spacing['2xl'],
   },
+  
   sectionTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 16,
-    color: '#1E293B',
-    marginBottom: 16,
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.lg,
   },
+  
   symptomGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -4,
+    marginHorizontal: -theme.spacing.xs,
+    marginBottom: theme.spacing.lg,
   },
+  
   symptomChip: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: theme.colors.background.primary,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius['2xl'],
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    margin: 4,
+    borderColor: theme.colors.border.light,
+    margin: theme.spacing.xs,
   },
+  
   symptomChipSelected: {
-    backgroundColor: '#0066CC',
-    borderColor: '#0066CC',
+    backgroundColor: theme.colors.primary[500],
+    borderColor: theme.colors.primary[500],
   },
+  
   symptomChipText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: '#64748B',
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
   },
+  
   symptomChipTextSelected: {
-    color: '#FFFFFF',
+    color: theme.colors.text.inverse,
   },
+  
   orText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#64748B',
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
-    marginVertical: 16,
+    marginBottom: theme.spacing.lg,
   },
-  customInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontFamily: 'Inter-Regular',
-    fontSize: 16,
-    color: '#1E293B',
-  },
+  
   severityContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  
   severityButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.background.primary,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: theme.colors.border.light,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
     alignItems: 'center',
     flex: 1,
     marginHorizontal: 2,
   },
+  
   severityNumber: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 18,
-    color: '#1E293B',
-    marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.xs,
   },
+  
   severityLabel: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 10,
-    color: '#64748B',
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
   },
+  
   descriptionInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#1E293B',
-    textAlignVertical: 'top',
     minHeight: 80,
   },
+  
   triggerGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -4,
-    marginBottom: 16,
+    marginHorizontal: -theme.spacing.xs,
+    marginBottom: theme.spacing.lg,
   },
+  
   triggerChip: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
+    backgroundColor: theme.colors.background.primary,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    margin: 4,
+    borderColor: theme.colors.border.light,
+    margin: theme.spacing.xs,
   },
+  
   triggerChipSelected: {
-    backgroundColor: '#F59E0B',
-    borderColor: '#F59E0B',
+    backgroundColor: theme.colors.warning[500],
+    borderColor: theme.colors.warning[500],
   },
+  
   triggerChipText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: '#64748B',
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.secondary,
   },
+  
   triggerChipTextSelected: {
-    color: '#FFFFFF',
+    color: theme.colors.text.inverse,
   },
+  
   customTriggerContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
+    alignItems: 'flex-end',
+    marginBottom: theme.spacing.lg,
   },
+  
   customTriggerInput: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#1E293B',
-    marginRight: 8,
+    marginRight: theme.spacing.sm,
+    marginBottom: 0,
   },
+  
   addTriggerButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#0066CC',
-    borderRadius: 8,
-    padding: 12,
+    width: 48,
+    height: 48,
   },
+  
   selectedTriggers: {
-    marginTop: 8,
+    marginTop: theme.spacing.sm,
   },
+  
   selectedTriggersTitle: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 8,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.sm,
   },
+  
   selectedTriggersList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
+  
   selectedTriggerTag: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: theme.colors.warning[100],
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-    marginBottom: 4,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.md,
+    marginRight: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
   },
+  
   selectedTriggerText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: '#92400E',
-    marginRight: 4,
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.warning[700],
+    marginRight: theme.spacing.xs,
   },
+  
   optionsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  
   optionButton: {
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
     flex: 0.48,
   },
-  optionButtonText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: '#0066CC',
-    marginLeft: 6,
-  },
+  
   saveContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: theme.spacing['2xl'],
+    paddingVertical: theme.spacing.lg,
+    backgroundColor: theme.colors.background.primary,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  saveButton: {
-    backgroundColor: '#0066CC',
-    paddingVertical: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 16,
-    color: '#FFFFFF',
+    borderTopColor: theme.colors.border.light,
   },
 });

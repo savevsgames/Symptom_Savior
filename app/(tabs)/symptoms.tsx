@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Filter, Plus, Calendar, Clock, TrendingUp } from 'lucide-react-native';
+import { Search, Plus, TrendingUp } from 'lucide-react-native';
 import { router } from 'expo-router';
+import { BaseTextInput, BaseButton, BaseCard, SymptomCard } from '@/components/ui';
+import { theme } from '@/lib/theme';
 
 interface SymptomEntry {
   id: string;
@@ -73,18 +75,6 @@ export default function Symptoms() {
     { key: 'severe', label: 'Severe' },
   ];
 
-  const getSeverityColor = (severity: number) => {
-    if (severity <= 2) return '#10B981';
-    if (severity <= 3) return '#F59E0B';
-    return '#EF4444';
-  };
-
-  const getSeverityText = (severity: number) => {
-    if (severity <= 2) return 'Mild';
-    if (severity <= 3) return 'Moderate';
-    return 'Severe';
-  };
-
   const filteredSymptoms = symptoms.filter(symptom => {
     const matchesSearch = symptom.symptom.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          symptom.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -106,22 +96,19 @@ export default function Symptoms() {
           style={styles.addButton}
           onPress={() => router.push('/add-symptom')}
         >
-          <Plus size={20} color="#0066CC" strokeWidth={2} />
+          <Plus size={20} color={theme.colors.primary[500]} strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
-      {/* Search and Filters */}
+      {/* Search */}
       <View style={styles.searchSection}>
-        <View style={styles.searchContainer}>
-          <Search size={20} color="#64748B" strokeWidth={2} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search symptoms..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#94A3B8"
-          />
-        </View>
+        <BaseTextInput
+          placeholder="Search symptoms..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          leftIcon={<Search size={20} color={theme.colors.text.tertiary} strokeWidth={2} />}
+          containerStyle={styles.searchContainer}
+        />
         
         <ScrollView 
           horizontal 
@@ -129,88 +116,55 @@ export default function Symptoms() {
           style={styles.filterContainer}
         >
           {filterOptions.map((filter) => (
-            <TouchableOpacity
+            <BaseButton
               key={filter.key}
-              style={[
-                styles.filterButton,
-                selectedFilter === filter.key && styles.filterButtonActive
-              ]}
+              title={filter.label}
               onPress={() => setSelectedFilter(filter.key)}
-            >
-              <Text style={[
-                styles.filterButtonText,
-                selectedFilter === filter.key && styles.filterButtonTextActive
-              ]}>
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
+              variant={selectedFilter === filter.key ? 'primary' : 'outline'}
+              size="sm"
+              style={styles.filterButton}
+            />
           ))}
         </ScrollView>
       </View>
 
       {/* Stats Summary */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>{symptoms.length}</Text>
-          <Text style={styles.statLabel}>Total Entries</Text>
+      <BaseCard variant="elevated" style={styles.statsCard}>
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{symptoms.length}</Text>
+            <Text style={styles.statLabel}>Total Entries</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>3</Text>
+            <Text style={styles.statLabel}>This Week</Text>
+          </View>
+          <TouchableOpacity style={styles.statItem}>
+            <TrendingUp size={20} color={theme.colors.primary[500]} strokeWidth={2} />
+            <Text style={styles.statLabel}>View Trends</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>3</Text>
-          <Text style={styles.statLabel}>This Week</Text>
-        </View>
-        <TouchableOpacity style={styles.statCard}>
-          <TrendingUp size={20} color="#0066CC" strokeWidth={2} />
-          <Text style={styles.statLabel}>View Trends</Text>
-        </TouchableOpacity>
-      </View>
+      </BaseCard>
 
       {/* Symptoms List */}
       <ScrollView style={styles.symptomsList} showsVerticalScrollIndicator={false}>
         {filteredSymptoms.map((symptom) => (
-          <TouchableOpacity key={symptom.id} style={styles.symptomCard}>
-            <View style={styles.symptomHeader}>
-              <View style={styles.symptomInfo}>
-                <Text style={styles.symptomName}>{symptom.symptom}</Text>
-                <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(symptom.severity) }]}>
-                  <Text style={styles.severityText}>{getSeverityText(symptom.severity)}</Text>
-                </View>
-              </View>
-              <View style={styles.symptomMeta}>
-                <View style={styles.metaItem}>
-                  <Calendar size={12} color="#64748B" strokeWidth={2} />
-                  <Text style={styles.metaText}>{symptom.date}</Text>
-                </View>
-                <View style={styles.metaItem}>
-                  <Clock size={12} color="#64748B" strokeWidth={2} />
-                  <Text style={styles.metaText}>{symptom.time}</Text>
-                </View>
-              </View>
-            </View>
-            
-            <Text style={styles.symptomDescription}>{symptom.description}</Text>
-            
-            {symptom.triggers && symptom.triggers.length > 0 && (
-              <View style={styles.triggersContainer}>
-                <Text style={styles.triggersLabel}>Triggers:</Text>
-                <View style={styles.triggersList}>
-                  {symptom.triggers.map((trigger, index) => (
-                    <View key={index} style={styles.triggerTag}>
-                      <Text style={styles.triggerText}>{trigger}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          </TouchableOpacity>
+          <SymptomCard
+            key={symptom.id}
+            {...symptom}
+            onPress={() => {
+              // Navigate to symptom detail
+            }}
+          />
         ))}
         
         {filteredSymptoms.length === 0 && (
-          <View style={styles.emptyState}>
+          <BaseCard variant="outlined" style={styles.emptyState}>
             <Text style={styles.emptyStateText}>No symptoms found</Text>
             <Text style={styles.emptyStateSubtext}>
               {searchQuery ? 'Try adjusting your search or filters' : 'Start tracking your symptoms'}
             </Text>
-          </View>
+          </BaseCard>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -220,199 +174,99 @@ export default function Symptoms() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: theme.colors.background.secondary,
   },
+  
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: theme.spacing['2xl'],
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.sm,
   },
+  
   title: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 24,
-    color: '#1E293B',
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.fontSize['2xl'],
+    color: theme.colors.text.primary,
   },
+  
   addButton: {
-    backgroundColor: '#FFFFFF',
-    padding: 8,
-    borderRadius: 8,
+    backgroundColor: theme.colors.background.primary,
+    padding: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.colors.border.light,
   },
+  
   searchSection: {
-    paddingHorizontal: 24,
-    marginBottom: 16,
+    paddingHorizontal: theme.spacing['2xl'],
+    marginBottom: theme.spacing.lg,
   },
+  
   searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 12,
+    marginBottom: theme.spacing.md,
   },
-  searchInput: {
-    flex: 1,
-    fontFamily: 'Inter-Regular',
-    fontSize: 16,
-    color: '#1E293B',
-    marginLeft: 8,
-  },
+  
   filterContainer: {
     flexDirection: 'row',
   },
+  
   filterButton: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginRight: 8,
+    marginRight: theme.spacing.sm,
   },
-  filterButtonActive: {
-    backgroundColor: '#0066CC',
-    borderColor: '#0066CC',
+  
+  statsCard: {
+    marginHorizontal: theme.spacing['2xl'],
+    marginBottom: theme.spacing.lg,
   },
-  filterButtonText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: '#64748B',
-  },
-  filterButtonTextActive: {
-    color: '#FFFFFF',
-  },
+  
   statsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    marginBottom: 16,
-  },
-  statCard: {
-    backgroundColor: '#FFFFFF',
-    flex: 1,
+    justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginHorizontal: 4,
   },
+  
+  statItem: {
+    alignItems: 'center',
+  },
+  
   statNumber: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 20,
-    color: '#0066CC',
-    marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.fontSize.xl,
+    color: theme.colors.primary[500],
+    marginBottom: theme.spacing.xs,
   },
+  
   statLabel: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: '#64748B',
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
   },
+  
   symptomsList: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing['2xl'],
   },
-  symptomCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 12,
-  },
-  symptomHeader: {
-    marginBottom: 8,
-  },
-  symptomInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  symptomName: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 16,
-    color: '#1E293B',
-  },
-  severityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  severityText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  symptomMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  metaText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: '#64748B',
-    marginLeft: 4,
-  },
-  symptomDescription: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#475569',
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  triggersContainer: {
-    marginTop: 8,
-  },
-  triggersLabel: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 4,
-  },
-  triggersList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  triggerTag: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: 8,
-    marginBottom: 4,
-  },
-  triggerText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: '#475569',
-  },
+  
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 48,
+    paddingVertical: theme.spacing['4xl'],
   },
+  
   emptyStateText: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 16,
-    color: '#64748B',
-    marginBottom: 8,
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.sm,
   },
+  
   emptyStateSubtext: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#94A3B8',
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.tertiary,
     textAlign: 'center',
   },
 });

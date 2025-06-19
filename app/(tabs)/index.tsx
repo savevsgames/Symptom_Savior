@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Dimensions, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, TrendingUp, Calendar, Clock, CircleAlert as AlertCircle, MessageCircle } from 'lucide-react-native';
+import { Plus, TrendingUp, MessageCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
+import { BaseButton, BaseCard, SymptomCard } from '@/components/ui';
+import { theme } from '@/lib/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -12,26 +14,40 @@ interface SymptomEntry {
   severity: number;
   date: string;
   time: string;
+  description?: string;
+  triggers?: string[];
 }
 
 export default function Dashboard() {
   const [recentSymptoms] = useState<SymptomEntry[]>([
-    { id: '1', symptom: 'Headache', severity: 3, date: 'Today', time: '2:30 PM' },
-    { id: '2', symptom: 'Fatigue', severity: 2, date: 'Yesterday', time: '10:15 AM' },
-    { id: '3', symptom: 'Nausea', severity: 4, date: '2 days ago', time: '6:45 PM' },
+    { 
+      id: '1', 
+      symptom: 'Headache', 
+      severity: 3, 
+      date: 'Today', 
+      time: '2:30 PM',
+      description: 'Tension headache, pressure around temples',
+      triggers: ['Stress', 'Screen time']
+    },
+    { 
+      id: '2', 
+      symptom: 'Fatigue', 
+      severity: 2, 
+      date: 'Yesterday', 
+      time: '10:15 AM',
+      description: 'General tiredness, low energy',
+      triggers: ['Poor sleep']
+    },
+    { 
+      id: '3', 
+      symptom: 'Nausea', 
+      severity: 4, 
+      date: '2 days ago', 
+      time: '6:45 PM',
+      description: 'Strong nausea after eating, lasted 2 hours',
+      triggers: ['Spicy food']
+    },
   ]);
-
-  const getSeverityColor = (severity: number) => {
-    if (severity <= 2) return '#10B981';
-    if (severity <= 3) return '#F59E0B';
-    return '#EF4444';
-  };
-
-  const getSeverityText = (severity: number) => {
-    if (severity <= 2) return 'Mild';
-    if (severity <= 3) return 'Moderate';
-    return 'Severe';
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -53,32 +69,36 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <View style={styles.quickActions}>
-          <TouchableOpacity 
-            style={styles.primaryActionButton}
+          <BaseButton
+            title="Log New Symptom"
             onPress={() => router.push('/add-symptom')}
-          >
-            <Plus size={24} color="#FFFFFF" strokeWidth={2} />
-            <Text style={styles.primaryActionText}>Log New Symptom</Text>
-          </TouchableOpacity>
+            variant="primary"
+            size="lg"
+            fullWidth
+            style={styles.primaryAction}
+          />
           
           <View style={styles.secondaryActions}>
-            <TouchableOpacity style={styles.secondaryActionButton}>
-              <TrendingUp size={20} color="#0066CC" strokeWidth={2} />
-              <Text style={styles.secondaryActionText}>View Trends</Text>
-            </TouchableOpacity>
+            <BaseButton
+              title="View Trends"
+              onPress={() => {}}
+              variant="outline"
+              size="md"
+              style={styles.secondaryAction}
+            />
             
-            <TouchableOpacity 
-              style={styles.secondaryActionButton}
+            <BaseButton
+              title="Ask Guardian"
               onPress={() => router.push('/(tabs)/assistant')}
-            >
-              <MessageCircle size={20} color="#0066CC" strokeWidth={2} />
-              <Text style={styles.secondaryActionText}>Ask Guardian</Text>
-            </TouchableOpacity>
+              variant="outline"
+              size="md"
+              style={styles.secondaryAction}
+            />
           </View>
         </View>
 
         {/* Health Summary */}
-        <View style={styles.summaryCard}>
+        <BaseCard variant="elevated" style={styles.summaryCard}>
           <Text style={styles.cardTitle}>Today's Summary</Text>
           <View style={styles.summaryStats}>
             <View style={styles.statItem}>
@@ -96,41 +116,33 @@ export default function Dashboard() {
               <Text style={styles.statLabel}>Good Days</Text>
             </View>
           </View>
-        </View>
+        </BaseCard>
 
         {/* Recent Symptoms */}
         <View style={styles.recentSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Symptoms</Text>
-            <TouchableOpacity onPress={() => router.push('/symptoms')}>
-              <Text style={styles.viewAllText}>View All</Text>
-            </TouchableOpacity>
+            <BaseButton
+              title="View All"
+              onPress={() => router.push('/(tabs)/symptoms')}
+              variant="ghost"
+              size="sm"
+            />
           </View>
           
           {recentSymptoms.map((symptom) => (
-            <View key={symptom.id} style={styles.symptomCard}>
-              <View style={styles.symptomHeader}>
-                <Text style={styles.symptomName}>{symptom.symptom}</Text>
-                <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(symptom.severity) }]}>
-                  <Text style={styles.severityText}>{getSeverityText(symptom.severity)}</Text>
-                </View>
-              </View>
-              <View style={styles.symptomMeta}>
-                <View style={styles.metaItem}>
-                  <Calendar size={14} color="#64748B" strokeWidth={2} />
-                  <Text style={styles.metaText}>{symptom.date}</Text>
-                </View>
-                <View style={styles.metaItem}>
-                  <Clock size={14} color="#64748B" strokeWidth={2} />
-                  <Text style={styles.metaText}>{symptom.time}</Text>
-                </View>
-              </View>
-            </View>
+            <SymptomCard
+              key={symptom.id}
+              {...symptom}
+              onPress={() => {
+                // Navigate to symptom detail
+              }}
+            />
           ))}
         </View>
 
         {/* Guardian Tip */}
-        <View style={styles.tipCard}>
+        <BaseCard variant="filled" style={styles.tipCard}>
           <View style={styles.tipHeader}>
             <Image 
               source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
@@ -142,13 +154,14 @@ export default function Dashboard() {
           <Text style={styles.tipText}>
             Regular symptom tracking helps identify patterns and triggers. Try to log symptoms as they occur for the most accurate data. Your guardian is always here to help guide you on your health journey.
           </Text>
-          <TouchableOpacity 
-            style={styles.tipButton}
+          <BaseButton
+            title="Chat with Guardian"
             onPress={() => router.push('/(tabs)/assistant')}
-          >
-            <Text style={styles.tipButtonText}>Chat with Guardian</Text>
-          </TouchableOpacity>
-        </View>
+            variant="primary"
+            size="sm"
+            style={styles.tipButton}
+          />
+        </BaseCard>
       </ScrollView>
     </SafeAreaView>
   );
@@ -157,220 +170,152 @@ export default function Dashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: theme.colors.background.secondary,
   },
+  
   header: {
-    padding: 24,
-    paddingBottom: 16,
+    padding: theme.spacing['2xl'],
+    paddingBottom: theme.spacing.lg,
   },
+  
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  
   greeting: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 28,
-    color: '#1E293B',
-    marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.fontSize['3xl'],
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.xs,
   },
+  
   subtitle: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 16,
-    color: '#64748B',
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.secondary,
   },
+  
   guardianImage: {
     width: 80,
     height: 80,
   },
+  
   quickActions: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
+    paddingHorizontal: theme.spacing['2xl'],
+    marginBottom: theme.spacing['2xl'],
   },
-  primaryActionButton: {
-    backgroundColor: '#0066CC',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    marginBottom: 12,
+  
+  primaryAction: {
+    marginBottom: theme.spacing.md,
   },
-  primaryActionText: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginLeft: 8,
-  },
+  
   secondaryActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  secondaryActionButton: {
-    backgroundColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+  
+  secondaryAction: {
     flex: 0.48,
   },
-  secondaryActionText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: '#0066CC',
-    marginLeft: 6,
-  },
+  
   summaryCard: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 24,
-    marginBottom: 24,
-    padding: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    marginHorizontal: theme.spacing['2xl'],
+    marginBottom: theme.spacing['2xl'],
   },
+  
   cardTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 18,
-    color: '#1E293B',
-    marginBottom: 16,
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.lg,
   },
+  
   summaryStats: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  
   statItem: {
     flex: 1,
     alignItems: 'center',
   },
+  
   statNumber: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 24,
-    color: '#0066CC',
-    marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.fontSize['2xl'],
+    color: theme.colors.primary[500],
+    marginBottom: theme.spacing.xs,
   },
+  
   statLabel: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: '#64748B',
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.secondary,
     textAlign: 'center',
   },
+  
   statDivider: {
     width: 1,
     height: 40,
-    backgroundColor: '#E2E8F0',
-    marginHorizontal: 16,
+    backgroundColor: theme.colors.border.light,
+    marginHorizontal: theme.spacing.lg,
   },
+  
   recentSection: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
+    paddingHorizontal: theme.spacing['2xl'],
+    marginBottom: theme.spacing['2xl'],
   },
+  
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: theme.spacing.lg,
   },
+  
   sectionTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 18,
-    color: '#1E293B',
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.lg,
+    color: theme.colors.text.primary,
   },
-  viewAllText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: '#0066CC',
-  },
-  symptomCard: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 12,
-  },
-  symptomHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  symptomName: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 16,
-    color: '#1E293B',
-  },
-  severityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  severityText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  symptomMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  metaText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: '#64748B',
-    marginLeft: 4,
-  },
+  
   tipCard: {
-    backgroundColor: '#EBF8FF',
-    marginHorizontal: 24,
-    marginBottom: 24,
-    padding: 16,
-    borderRadius: 12,
+    marginHorizontal: theme.spacing['2xl'],
+    marginBottom: theme.spacing['2xl'],
+    backgroundColor: theme.colors.primary[50],
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: theme.colors.primary[100],
   },
+  
   tipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: theme.spacing.sm,
   },
+  
   tipAvatar: {
     width: 24,
     height: 24,
-    marginRight: 8,
+    marginRight: theme.spacing.sm,
   },
+  
   tipTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
-    color: '#0066CC',
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.primary[600],
   },
+  
   tipText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#1E40AF',
-    lineHeight: 20,
-    marginBottom: 12,
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.primary[700],
+    lineHeight: theme.typography.lineHeight.normal * theme.typography.fontSize.sm,
+    marginBottom: theme.spacing.md,
   },
+  
   tipButton: {
-    backgroundColor: '#0066CC',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
     alignSelf: 'flex-start',
-  },
-  tipButtonText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: '#FFFFFF',
   },
 });
