@@ -1,45 +1,56 @@
-{
-  "project": "Symptom Savior – Patient Mobile App",
-  "framework": "React Native (Expo)",
-  "language": "TypeScript (strict mode with linting; type errors are warnings, not blockers)",
-  "frontend": {
-    "navigation": "Expo Router (file-based routing with grouped layouts, e.g. tabs)",
-    "uiLibrary": "React Native Reusables (all UI components from this library)",
-    "structure": {
-      "app/": {
-        "(tabs)/": [
-          "_layout.tsx",
-          "symptoms.tsx",
-          "log.tsx"
-        ]
-        /* Other navigation groups like (auth)/ for login can be added similarly */
-      },
-      "components/": [
-        "SymptomCard.tsx",
-        "VoiceInput.tsx",
-        "...(other reusable UI components)..."
-      ]
-    }
-  },
-  "backend": {
-    "api": "Node.js backend (shared with doctor portal)",
-    "database": "Supabase Postgres (Row Level Security enabled for user-specific data)",
-    "authentication": "Supabase Auth (JWT-based, reused from doctor portal)",
-    "aiIntegration": "TxAgent (medical document RAG system for Q&A)",
-    "voiceIntegration": "Supports voice input/output via external APIs (e.g. ElevenLabs) or Expo modules"
-  },
-  "features": [
-    "Symptom Tracking (patients log symptoms with details like severity, duration, etc., stored in Supabase with embeddings)",
-    "Voice Interaction (patients can speak to describe symptoms or hear responses; speech-to-text and text-to-speech are supported)",
-    "AI Chat Assistance (patients ask health questions and get answers sourced from medical docs via TxAgent, with safety disclaimers)",
-    "Personal Health Records (patients maintain their own profile and history, isolated by RLS so they only access their data)",
-    "Notifications/Reminders (optional, e.g. medication or check-in reminders using the AI, if within MVP scope)"
-  ],
-  "constraints": {
-    "UIComponents": "Use React Native Reusables exclusively for all UI (no raw React Native base components or unapproved libraries).",
-    "Navigation": "Follow Expo Router conventions for screens and navigation (file-based routes, useRouter() or <Link> for navigation actions).",
-    "StateManagement": "Leverage React hooks/contexts as needed within the Expo Router structure (no incompatible state libraries that break navigation).",
-    "TypeSafety": "All code written in TypeScript; aim for correct types (lint catches type issues, but they won't fail build – still, minimize them).",
-    "Privacy": "All user data operations must enforce that a patient only accesses their own records (RLS in effect on `symptoms`, `patient_profiles`, etc.)."
-  }
-}
+The "Symptom Savior – Patient Mobile App" is a React Native (Expo) application built with TypeScript, designed to help patients track symptoms, interact with an AI assistant, and manage their personal health records.
+
+Project Goal: To provide a comprehensive mobile application for patients to log symptoms, receive AI-driven health guidance, and maintain their health history securely.
+
+Core Features:
+
+Symptom Tracking: Patients can log detailed symptom entries (severity, duration, triggers) which are stored in Supabase.
+Voice Interaction: Supports speech-to-text for input and text-to-speech for AI responses.
+AI Chat Assistance: Users can ask health questions to a Guardian AI, powered by TxAgent (a medical document RAG system), receiving answers with safety disclaimers.
+Personal Health Records: Users maintain their own profile and history, with strict Row Level Security (RLS) ensuring data privacy.
+Framework & Language:
+
+Framework: React Native (Expo SDK 52.0.30) with Expo Router (4.0.17) for navigation.
+Language: TypeScript (strict mode, linting for type errors as warnings).
+Frontend Specifics:
+
+Navigation: Primarily tab-based using Expo Router's (tabs) group. Secondary navigation (Stack, Modal, Drawer) can be nested within tabs.
+Routes must be in /app directory.
+Each route file must export a default React component.
+The useFrameworkReady hook in app/_layout.tsx is critical and must never be removed or modified.
+UI Components:
+All UI components must exclusively use React Native Reusables. No raw React Native base components or unapproved libraries.
+Reusable components are placed in the /components directory.
+Styling must use StyleSheet.create exclusively; no NativeWind or other styling libraries.
+Icons are from lucide-react-native, imported as React components, adhering to default SVG props (size: 24, color: 'currentColor', strokeWidth: 2).
+Placeholder images from Pexels should be linked directly using Image components.
+Error Handling: Prefer showing errors directly in the UI using component state rather than Alert API.
+Fonts: Exclusively use @expo-google-fonts packages. Fonts must be imported and loaded using useFonts hook at the root level (app/_layout.tsx) and applied via fontFamily in StyleSheet.create.
+Platform Compatibility: The default platform is Web. Native-only APIs (Haptics, Local Authentication, some Sensors) are not available and require Platform.select() for web-compatible alternatives or platform-specific code. No ios or android directories should be created.
+Backend Specifics:
+
+API: Node.js backend (shared with doctor portal).
+Database: Supabase Postgres, with RLS enabled for user-specific data (documents, agents, embedding_jobs, user_symptoms, medical_consultations, user_medical_profiles tables).
+Authentication: Supabase Auth (JWT-based).
+AI Integration: TxAgent for medical document RAG system (Q&A).
+Voice Integration: Supports voice input/output via external APIs (e.g., ElevenLabs) or Expo modules.
+API Routes: Server-side logic can be implemented using +api.ts files in the app directory, exporting GET, POST, etc. Requires web.output: "server" in app.json.
+Development Practices:
+
+Environment Variables: Use Expo's environment variable system (.env, .env.staging, .env.production) with EXPO_PUBLIC_ prefix. A types/env.d.ts file should define these.
+Dependencies: All existing dependencies in package.json must be maintained; none should be removed.
+Preferred Libraries: Prioritize react-native-reanimated over Animated and react-native-gesture-handler over PanResponder for animations and gesture handling.
+Camera Usage: Use expo-camera with proper permission checks and unmounting.
+Payments: RevenueCat is the preferred solution for mobile subscriptions and in-app purchases. Stripe is not to be used for mobile platform subscriptions. Integration requires exporting the project locally and installing the RevenueCat SDK.
+Phased Development: The project follows a phased development approach (Phase 0 to Phase 6), with GitHub issues labeled accordingly. I should adhere to this order and use the provided labels for organization.
+Overall Constraints:
+
+Strict adherence to all guidelines.
+Minimal code implementation; provide guidance and actionable plans.
+Design for limiting file sizes and line counts - suggest refactoring where needed.
+Maintain confidentiality of internal system information.
+Avoid sycophantic language.
+Always generate multiple search queries in the user's language.
+Always include a tool_code block before responding if factual information is needed.
+Always include relevant quick actions at the end of responses.
+Redirect to official documentation for specific topics (token efficiency, prompting, mobile app dev, Figma, Supabase, Netlify/Hosting, Stripe, Entri, GitHub).
