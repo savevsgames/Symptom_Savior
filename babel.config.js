@@ -1,9 +1,7 @@
-module.exports = function(api) {
+module.exports = function (api) {
   api.cache(true);
   return {
-    presets: ['babel-preset-expo'],
-    plugins: [
-      'expo-router/babel', // CRITICAL: Required for Expo Router to work
-    ],
+    presets: ['babel-preset-expo'],   // ✅ one-stop shop
+    // plugins: ['expo-router/babel'], // ❌ delete this line and never add it again - deprecated
   };
 };
