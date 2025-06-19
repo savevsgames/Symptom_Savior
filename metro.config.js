@@ -1,5 +1,5 @@
 // metro.config.js
-const { getDefaultConfig } = require('expo/metro-config'); // ✅ Use expo/metro-config for Expo Router 4.x
+const { getDefaultConfig } = require('expo-router/metro');
 
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
