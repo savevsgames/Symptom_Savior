@@ -44,10 +44,7 @@
     "react-native-web": "^0.20.0",
     "react-native-webview": "13.13.5",
     "readable-stream": "^4.7.0",
-    "util": "^0.12.5",
-    "metro": "0.82.4",
-    "metro-config": "0.82.4",
-    "metro-resolver": "0.82.4"
+    "util": "^0.12.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
