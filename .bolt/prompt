@@ -1,0 +1,45 @@
+{
+  "project": "Symptom Savior – Patient Mobile App",
+  "framework": "React Native (Expo)",
+  "language": "TypeScript (strict mode with linting; type errors are warnings, not blockers)",
+  "frontend": {
+    "navigation": "Expo Router (file-based routing with grouped layouts, e.g. tabs)",
+    "uiLibrary": "React Native Reusables (all UI components from this library)",
+    "structure": {
+      "app/": {
+        "(tabs)/": [
+          "_layout.tsx",
+          "symptoms.tsx",
+          "log.tsx"
+        ]
+        /* Other navigation groups like (auth)/ for login can be added similarly */
+      },
+      "components/": [
+        "SymptomCard.tsx",
+        "VoiceInput.tsx",
+        "...(other reusable UI components)..."
+      ]
+    }
+  },
+  "backend": {
+    "api": "Node.js backend (shared with doctor portal)",
+    "database": "Supabase Postgres (Row Level Security enabled for user-specific data)",
+    "authentication": "Supabase Auth (JWT-based, reused from doctor portal)",
+    "aiIntegration": "TxAgent (medical document RAG system for Q&A)",
+    "voiceIntegration": "Supports voice input/output via external APIs (e.g. ElevenLabs) or Expo modules"
+  },
+  "features": [
+    "Symptom Tracking (patients log symptoms with details like severity, duration, etc., stored in Supabase with embeddings)",
+    "Voice Interaction (patients can speak to describe symptoms or hear responses; speech-to-text and text-to-speech are supported)",
+    "AI Chat Assistance (patients ask health questions and get answers sourced from medical docs via TxAgent, with safety disclaimers)",
+    "Personal Health Records (patients maintain their own profile and history, isolated by RLS so they only access their data)",
+    "Notifications/Reminders (optional, e.g. medication or check-in reminders using the AI, if within MVP scope)"
+  ],
+  "constraints": {
+    "UIComponents": "Use React Native Reusables exclusively for all UI (no raw React Native base components or unapproved libraries).",
+    "Navigation": "Follow Expo Router conventions for screens and navigation (file-based routes, useRouter() or <Link> for navigation actions).",
+    "StateManagement": "Leverage React hooks/contexts as needed within the Expo Router structure (no incompatible state libraries that break navigation).",
+    "TypeSafety": "All code written in TypeScript; aim for correct types (lint catches type issues, but they won't fail build – still, minimize them).",
+    "Privacy": "All user data operations must enforce that a patient only accesses their own records (RLS in effect on `symptoms`, `patient_profiles`, etc.)."
+  }
+}
