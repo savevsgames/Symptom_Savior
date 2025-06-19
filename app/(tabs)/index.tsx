@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, TrendingUp, Calendar, Clock, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { Plus, TrendingUp, Calendar, Clock, CircleAlert as AlertCircle, MessageCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 
 const { width } = Dimensions.get('window');
@@ -38,8 +38,17 @@ export default function Dashboard() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>Good morning!</Text>
-          <Text style={styles.subtitle}>How are you feeling today?</Text>
+          <View style={styles.headerContent}>
+            <View>
+              <Text style={styles.greeting}>Good morning!</Text>
+              <Text style={styles.subtitle}>How are you feeling today?</Text>
+            </View>
+            <Image 
+              source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+              style={styles.guardianImage}
+              resizeMode="contain"
+            />
+          </View>
         </View>
 
         {/* Quick Actions */}
@@ -58,9 +67,12 @@ export default function Dashboard() {
               <Text style={styles.secondaryActionText}>View Trends</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.secondaryActionButton}>
-              <Calendar size={20} color="#0066CC" strokeWidth={2} />
-              <Text style={styles.secondaryActionText}>Schedule</Text>
+            <TouchableOpacity 
+              style={styles.secondaryActionButton}
+              onPress={() => router.push('/(tabs)/assistant')}
+            >
+              <MessageCircle size={20} color="#0066CC" strokeWidth={2} />
+              <Text style={styles.secondaryActionText}>Ask Guardian</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -117,15 +129,25 @@ export default function Dashboard() {
           ))}
         </View>
 
-        {/* Health Tip */}
+        {/* Guardian Tip */}
         <View style={styles.tipCard}>
           <View style={styles.tipHeader}>
-            <AlertCircle size={20} color="#0066CC" strokeWidth={2} />
-            <Text style={styles.tipTitle}>Daily Health Tip</Text>
+            <Image 
+              source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+              style={styles.tipAvatar}
+              resizeMode="contain"
+            />
+            <Text style={styles.tipTitle}>Guardian's Daily Wisdom</Text>
           </View>
           <Text style={styles.tipText}>
-            Regular symptom tracking helps identify patterns and triggers. Try to log symptoms as they occur for the most accurate data.
+            Regular symptom tracking helps identify patterns and triggers. Try to log symptoms as they occur for the most accurate data. Your guardian is always here to help guide you on your health journey.
           </Text>
+          <TouchableOpacity 
+            style={styles.tipButton}
+            onPress={() => router.push('/(tabs)/assistant')}
+          >
+            <Text style={styles.tipButtonText}>Chat with Guardian</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -141,6 +163,11 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 16,
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   greeting: {
     fontFamily: 'Inter-Bold',
     fontSize: 28,
@@ -151,6 +178,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     fontSize: 16,
     color: '#64748B',
+  },
+  guardianImage: {
+    width: 80,
+    height: 80,
   },
   quickActions: {
     paddingHorizontal: 24,
@@ -304,7 +335,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 24,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#BFDBFE',
   },
@@ -313,16 +344,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  tipAvatar: {
+    width: 24,
+    height: 24,
+    marginRight: 8,
+  },
   tipTitle: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
     color: '#0066CC',
-    marginLeft: 8,
   },
   tipText: {
     fontFamily: 'Inter-Regular',
     fontSize: 14,
     color: '#1E40AF',
     lineHeight: 20,
+    marginBottom: 12,
+  },
+  tipButton: {
+    backgroundColor: '#0066CC',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  tipButtonText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 12,
+    color: '#FFFFFF',
   },
 });

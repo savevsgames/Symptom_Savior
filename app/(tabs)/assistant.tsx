@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Send, Bot, User, Heart } from 'lucide-react-native';
 
@@ -115,12 +115,14 @@ export default function Assistant() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
-            <View style={styles.botAvatar}>
-              <Heart size={20} color="#FFFFFF" strokeWidth={2} />
-            </View>
+            <Image 
+              source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+              style={styles.characterAvatar}
+              resizeMode="contain"
+            />
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Symptom Savior Assistant</Text>
-              <Text style={styles.headerSubtitle}>Your compassionate health companion</Text>
+              <Text style={styles.headerSubtitle}>Your compassionate health guardian</Text>
             </View>
           </View>
         </View>
@@ -142,7 +144,11 @@ export default function Assistant() {
                   message.isBot ? styles.botAvatar : styles.userAvatar
                 ]}>
                   {message.isBot ? (
-                    <Heart size={16} color="#FFFFFF" strokeWidth={2} />
+                    <Image 
+                      source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+                      style={styles.messageAvatar}
+                      resizeMode="contain"
+                    />
                   ) : (
                     <User size={16} color="#FFFFFF" strokeWidth={2} />
                   )}
@@ -167,12 +173,16 @@ export default function Assistant() {
             <View style={[styles.messageWrapper, styles.botMessageWrapper]}>
               <View style={styles.messageHeader}>
                 <View style={styles.botAvatar}>
-                  <Heart size={16} color="#FFFFFF" strokeWidth={2} />
+                  <Image 
+                    source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+                    style={styles.messageAvatar}
+                    resizeMode="contain"
+                  />
                 </View>
                 <Text style={styles.timestamp}>typing...</Text>
               </View>
               <View style={[styles.messageBubble, styles.botMessage]}>
-                <Text style={styles.typingText}>Assistant is typing...</Text>
+                <Text style={styles.typingText}>Your guardian is typing...</Text>
               </View>
             </View>
           )}
@@ -238,8 +248,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  characterAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
   headerText: {
     marginLeft: 12,
+    flex: 1,
   },
   headerTitle: {
     fontFamily: 'Inter-SemiBold',
@@ -270,18 +286,25 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   avatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
+    overflow: 'hidden',
   },
   botAvatar: {
-    backgroundColor: '#0066CC',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 2,
+    borderColor: '#0066CC',
   },
   userAvatar: {
     backgroundColor: '#10B981',
+  },
+  messageAvatar: {
+    width: 28,
+    height: 28,
   },
   timestamp: {
     fontFamily: 'Inter-Regular',
