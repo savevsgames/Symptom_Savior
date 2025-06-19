@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Plus, X } from 'lucide-react-native';
+import { ArrowLeft, Plus, X, Clock, MapPin } from 'lucide-react-native';
 import { BaseButton, BaseTextInput, BaseCard } from '@/components/ui';
 import { useSymptoms } from '@/hooks/useSymptoms';
 import { theme } from '@/lib/theme';
@@ -14,6 +14,8 @@ export default function AddSymptom() {
   const [description, setDescription] = useState('');
   const [triggers, setTriggers] = useState<string[]>([]);
   const [newTrigger, setNewTrigger] = useState('');
+  const [duration, setDuration] = useState('');
+  const [location, setLocation] = useState('');
   const [saving, setSaving] = useState(false);
   
   const { addSymptom } = useSymptoms();
@@ -27,6 +29,10 @@ export default function AddSymptom() {
   const commonTriggers = [
     'Stress', 'Weather', 'Food', 'Exercise', 'Lack of Sleep',
     'Screen Time', 'Loud Noises', 'Bright Lights', 'Medication'
+  ];
+
+  const commonLocations = [
+    'Head', 'Neck', 'Chest', 'Back', 'Abdomen', 'Arms', 'Legs', 'Joints'
   ];
 
   const severityLabels = ['Minimal', 'Mild', 'Moderate', 'Severe', 'Very Severe'];
@@ -57,15 +63,24 @@ export default function AddSymptom() {
       return;
     }
 
+    if (severity < 1 || severity > 10) {
+      Alert.alert('Invalid Severity', 'Please select a severity level between 1 and 10.');
+      return;
+    }
+
     setSaving(true);
     
     try {
-      const { error } = await addSymptom({
+      const symptomData = {
         symptom: symptomName.trim(),
         severity,
-        description: description.trim(),
-        triggers,
-      });
+        description: description.trim() || undefined,
+        triggers: triggers.length > 0 ? triggers : undefined,
+        duration_hours: duration ? parseInt(duration) : undefined,
+        location: location.trim() || undefined,
+      };
+
+      const { error } = await addSymptom(symptomData);
 
       if (error) {
         Alert.alert('Error', 'Failed to save symptom. Please try again.');
@@ -135,39 +150,91 @@ export default function AddSymptom() {
 
         {/* Severity Selection */}
         <BaseCard style={styles.section}>
-          <Text style={styles.sectionTitle}>How severe is this symptom?</Text>
+          <Text style={styles.sectionTitle}>How severe is this symptom? (1-10)</Text>
           <View style={styles.severityContainer}>
-            {severityLabels.map((label, index) => (
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => (
               <TouchableOpacity
-                key={index}
+                key={level}
                 style={[
                   styles.severityButton,
-                  severity === index + 1 && { backgroundColor: severityColors[index] }
+                  severity === level && { 
+                    backgroundColor: level <= 2 ? severityColors[0] :
+                                   level <= 4 ? severityColors[1] :
+                                   level <= 6 ? severityColors[2] :
+                                   level <= 8 ? severityColors[3] : severityColors[4]
+                  }
                 ]}
-                onPress={() => setSeverity(index + 1)}
+                onPress={() => setSeverity(level)}
               >
                 <Text style={[
                   styles.severityNumber,
-                  severity === index + 1 && { color: theme.colors.text.inverse }
+                  severity === level && { color: theme.colors.text.inverse }
                 ]}>
-                  {index + 1}
-                </Text>
-                <Text style={[
-                  styles.severityLabel,
-                  severity === index + 1 && { color: theme.colors.text.inverse }
-                ]}>
-                  {label}
+                  {level}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+          <Text style={styles.severityHint}>
+            {severity <= 2 ? 'Minimal - barely noticeable' :
+             severity <= 4 ? 'Mild - noticeable but manageable' :
+             severity <= 6 ? 'Moderate - interferes with activities' :
+             severity <= 8 ? 'Severe - difficult to ignore' :
+             'Very Severe - overwhelming'}
+          </Text>
+        </BaseCard>
+
+        {/* Location */}
+        <BaseCard style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            <MapPin size={16} color={theme.colors.text.primary} strokeWidth={2} />
+            {' '}Where is the symptom located? (Optional)
+          </Text>
+          <View style={styles.locationGrid}>
+            {commonLocations.map((loc) => (
+              <TouchableOpacity
+                key={loc}
+                style={[
+                  styles.locationChip,
+                  location === loc && styles.locationChipSelected
+                ]}
+                onPress={() => setLocation(location === loc ? '' : loc)}
+              >
+                <Text style={[
+                  styles.locationChipText,
+                  location === loc && styles.locationChipTextSelected
+                ]}>
+                  {loc}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <BaseTextInput
+            placeholder="Or specify custom location..."
+            value={location}
+            onChangeText={setLocation}
+          />
+        </BaseCard>
+
+        {/* Duration */}
+        <BaseCard style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            <Clock size={16} color={theme.colors.text.primary} strokeWidth={2} />
+            {' '}How long have you had this symptom? (Optional)
+          </Text>
+          <BaseTextInput
+            placeholder="Duration in hours (e.g., 2, 24, 72)"
+            value={duration}
+            onChangeText={setDuration}
+            keyboardType="numeric"
+          />
         </BaseCard>
 
         {/* Description */}
         <BaseCard style={styles.section}>
           <Text style={styles.sectionTitle}>Additional Details (Optional)</Text>
           <BaseTextInput
-            placeholder="Describe the symptom in more detail (location, duration, quality, etc.)"
+            placeholder="Describe the symptom in more detail (quality, pattern, what makes it better/worse, etc.)"
             value={description}
             onChangeText={setDescription}
             multiline
@@ -302,6 +369,8 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.primary,
     marginBottom: theme.spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   
   symptomGrid: {
@@ -346,7 +415,9 @@ const styles = StyleSheet.create({
   
   severityContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginBottom: theme.spacing.sm,
   },
   
   severityButton: {
@@ -354,24 +425,58 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border.light,
     borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
+    padding: theme.spacing.sm,
     alignItems: 'center',
-    flex: 1,
-    marginHorizontal: 2,
+    justifyContent: 'center',
+    width: '18%',
+    aspectRatio: 1,
+    marginBottom: theme.spacing.xs,
   },
   
   severityNumber: {
     fontFamily: theme.typography.fontFamily.bold,
-    fontSize: theme.typography.fontSize.lg,
+    fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.primary,
-    marginBottom: theme.spacing.xs,
   },
   
-  severityLabel: {
+  severityHint: {
     fontFamily: theme.typography.fontFamily.regular,
-    fontSize: theme.typography.fontSize.xs,
+    fontSize: theme.typography.fontSize.sm,
     color: theme.colors.text.secondary,
     textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  
+  locationGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -theme.spacing.xs,
+    marginBottom: theme.spacing.lg,
+  },
+  
+  locationChip: {
+    backgroundColor: theme.colors.background.primary,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.border.light,
+    margin: theme.spacing.xs,
+  },
+  
+  locationChipSelected: {
+    backgroundColor: theme.colors.secondary[500],
+    borderColor: theme.colors.secondary[500],
+  },
+  
+  locationChipText: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
+  },
+  
+  locationChipTextSelected: {
+    color: theme.colors.text.inverse,
   },
   
   descriptionInput: {

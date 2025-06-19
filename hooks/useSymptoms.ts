@@ -1,6 +1,6 @@
 /**
  * Symptoms Hook
- * Manages symptom data operations with Supabase
+ * Manages symptom data operations with Supabase using dedicated user_symptoms table
  */
 
 import { useState, useEffect } from 'react';
@@ -16,8 +16,20 @@ export interface Symptom {
   date: string;
   time: string;
   triggers?: string[];
+  duration_hours?: number;
+  location?: string;
   user_id: string;
+  recorded_at: string;
   created_at: string;
+}
+
+interface AddSymptomData {
+  symptom: string;
+  severity: number;
+  description?: string;
+  triggers?: string[];
+  duration_hours?: number;
+  location?: string;
 }
 
 export function useSymptoms() {
@@ -37,33 +49,34 @@ export function useSymptoms() {
       setLoading(true);
       setError(null);
 
-      // Note: The schema shows 'documents' table, but we'll create a symptoms view
-      // For now, we'll use a mock implementation that would work with the actual schema
       const { data, error: fetchError } = await supabase
-        .from('documents')
+        .from('user_symptoms')
         .select('*')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('recorded_at', { ascending: false });
 
       if (fetchError) {
         throw fetchError;
       }
 
-      // Transform documents to symptoms format
-      const transformedSymptoms: Symptom[] = (data || []).map(doc => {
-        const metadata = doc.metadata || {};
-        return {
-          id: doc.id,
-          symptom: metadata.symptom || doc.filename || 'Unknown Symptom',
-          severity: metadata.severity || 1,
-          description: doc.content || '',
-          date: new Date(doc.created_at).toLocaleDateString(),
-          time: new Date(doc.created_at).toLocaleTimeString(),
-          triggers: metadata.triggers || [],
-          user_id: doc.user_id,
-          created_at: doc.created_at,
-        };
-      });
+      // Transform database records to UI format
+      const transformedSymptoms: Symptom[] = (data || []).map(record => ({
+        id: record.id,
+        symptom: record.symptom_name,
+        severity: record.severity,
+        description: record.description || '',
+        date: new Date(record.recorded_at).toLocaleDateString(),
+        time: new Date(record.recorded_at).toLocaleTimeString([], { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+        triggers: record.triggers || [],
+        duration_hours: record.duration_hours,
+        location: record.location,
+        user_id: record.user_id,
+        recorded_at: record.recorded_at,
+        created_at: record.created_at,
+      }));
 
       setSymptoms(transformedSymptoms);
       logger.debug('Symptoms fetched successfully', { count: transformedSymptoms.length });
@@ -75,30 +88,23 @@ export function useSymptoms() {
     }
   };
 
-  const addSymptom = async (symptomData: {
-    symptom: string;
-    severity: number;
-    description?: string;
-    triggers?: string[];
-  }) => {
+  const addSymptom = async (symptomData: AddSymptomData) => {
     if (!user) {
       throw new Error('User not authenticated');
     }
 
     try {
-      const metadata = {
-        symptom: symptomData.symptom,
-        severity: symptomData.severity,
-        triggers: symptomData.triggers || [],
-      };
-
       const { data, error: insertError } = await supabase
-        .from('documents')
+        .from('user_symptoms')
         .insert({
-          filename: symptomData.symptom,
-          content: symptomData.description || '',
-          metadata,
           user_id: user.id,
+          symptom_name: symptomData.symptom,
+          severity: symptomData.severity,
+          description: symptomData.description || null,
+          triggers: symptomData.triggers || [],
+          duration_hours: symptomData.duration_hours || null,
+          location: symptomData.location || null,
+          recorded_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -119,6 +125,45 @@ export function useSymptoms() {
     }
   };
 
+  const updateSymptom = async (symptomId: string, updates: Partial<AddSymptomData>) => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      const updateData: any = {};
+      
+      if (updates.symptom) updateData.symptom_name = updates.symptom;
+      if (updates.severity !== undefined) updateData.severity = updates.severity;
+      if (updates.description !== undefined) updateData.description = updates.description;
+      if (updates.triggers !== undefined) updateData.triggers = updates.triggers;
+      if (updates.duration_hours !== undefined) updateData.duration_hours = updates.duration_hours;
+      if (updates.location !== undefined) updateData.location = updates.location;
+
+      const { data, error: updateError } = await supabase
+        .from('user_symptoms')
+        .update(updateData)
+        .eq('id', symptomId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      logger.info('Symptom updated successfully', { symptomId });
+      
+      // Refresh symptoms list
+      await fetchSymptoms();
+      
+      return { data, error: null };
+    } catch (err) {
+      logger.error('Error updating symptom:', err);
+      return { data: null, error: err };
+    }
+  };
+
   const deleteSymptom = async (symptomId: string) => {
     if (!user) {
       throw new Error('User not authenticated');
@@ -126,7 +171,7 @@ export function useSymptoms() {
 
     try {
       const { error: deleteError } = await supabase
-        .from('documents')
+        .from('user_symptoms')
         .delete()
         .eq('id', symptomId)
         .eq('user_id', user.id);
@@ -147,6 +192,49 @@ export function useSymptoms() {
     }
   };
 
+  const getSymptomById = async (symptomId: string) => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('user_symptoms')
+        .select('*')
+        .eq('id', symptomId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      // Transform to UI format
+      const symptom: Symptom = {
+        id: data.id,
+        symptom: data.symptom_name,
+        severity: data.severity,
+        description: data.description || '',
+        date: new Date(data.recorded_at).toLocaleDateString(),
+        time: new Date(data.recorded_at).toLocaleTimeString([], { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
+        triggers: data.triggers || [],
+        duration_hours: data.duration_hours,
+        location: data.location,
+        user_id: data.user_id,
+        recorded_at: data.recorded_at,
+        created_at: data.created_at,
+      };
+
+      return { data: symptom, error: null };
+    } catch (err) {
+      logger.error('Error fetching symptom by ID:', err);
+      return { data: null, error: err };
+    }
+  };
+
   useEffect(() => {
     fetchSymptoms();
   }, [user]);
@@ -157,7 +245,9 @@ export function useSymptoms() {
     error,
     fetchSymptoms,
     addSymptom,
+    updateSymptom,
     deleteSymptom,
+    getSymptomById,
     refetch: fetchSymptoms,
   };
 }
