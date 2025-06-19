@@ -1,12 +1,8 @@
 // metro.config.js
-const { getDefaultConfig } = require('expo-router/metro'); // 👈 change this line
+const { getDefaultConfig } = require('expo/metro-config');
 
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
-
-/* ------------------------------------------------------------------ */
-/* Everything you added for polyfills and symlinks can stay as-is.     */
-/* ------------------------------------------------------------------ */
 
 // Enable Node-style imports required by Supabase on Web
 config.resolver.extraNodeModules = {
@@ -16,10 +12,14 @@ config.resolver.extraNodeModules = {
   util: require.resolve('util'),
 };
 
-// Optional tweaks you had before
-config.transformer.unstable_allowRequireContext = true;   // already true in router preset, but harmless
-config.resolver.unstable_enableSymlinks      = true;
+// Enable require.context for Expo Router (should be enabled by default but ensuring it's explicit)
+config.transformer.unstable_allowRequireContext = true;
+
+// Additional resolver settings for better compatibility
+config.resolver.unstable_enableSymlinks = true;
 config.resolver.unstable_enablePackageExports = true;
+
+// Ensure proper file extensions are recognized
 config.resolver.sourceExts.push('tsx', 'ts', 'jsx', 'js', 'json');
 config.resolver.assetExts.push('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg');
 
