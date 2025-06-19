@@ -3,17 +3,22 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Ensure Metro watches the correct directories
-config.watchFolders = [__dirname];
+// CRITICAL: Enable require.context for Expo Router
+config.transformer.unstable_allowRequireContext = true;
 
-// Configure resolver to handle the app directory properly
-config.resolver.platforms = ['native', 'web', 'ios', 'android'];
-
-// CRITICAL: Enable symlinks and package exports for proper module resolution
+// Enable symlinks and package exports for proper module resolution
 config.resolver.unstable_enableSymlinks = true;
 config.resolver.unstable_enablePackageExports = true;
 
-// Ensure source extensions are properly configured
+// Provide Node.js polyfills for web compatibility (Supabase needs these)
+config.resolver.extraNodeModules = {
+  stream: require.resolve('readable-stream'),
+  crypto: require.resolve('crypto-browserify'),
+  buffer: require.resolve('buffer'),
+  util: require.resolve('util'),
+};
+
+// Ensure proper source extensions
 config.resolver.sourceExts = [
   ...config.resolver.sourceExts,
   'tsx',
@@ -23,13 +28,7 @@ config.resolver.sourceExts = [
   'json'
 ];
 
-// Configure transformer for proper module resolution
-config.transformer = {
-  ...config.transformer,
-  unstable_allowRequireContext: true,
-};
-
-// Add resolver configuration for better module discovery
+// Configure resolver for better module discovery
 config.resolver.resolverMainFields = ['react-native', 'browser', 'main'];
 
 // Ensure proper asset extensions
