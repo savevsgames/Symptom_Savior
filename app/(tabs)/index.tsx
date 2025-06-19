@@ -1,53 +1,37 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions, Image } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, Dimensions, Image, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, TrendingUp, MessageCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { BaseButton, BaseCard, SymptomCard } from '@/components/ui';
+import { useSymptoms } from '@/hooks/useSymptoms';
+import { useAuthContext } from '@/contexts/AuthContext';
 import { theme } from '@/lib/theme';
 
 const { width } = Dimensions.get('window');
 
-interface SymptomEntry {
-  id: string;
-  symptom: string;
-  severity: number;
-  date: string;
-  time: string;
-  description?: string;
-  triggers?: string[];
-}
-
 export default function Dashboard() {
-  const [recentSymptoms] = useState<SymptomEntry[]>([
-    { 
-      id: '1', 
-      symptom: 'Headache', 
-      severity: 3, 
-      date: 'Today', 
-      time: '2:30 PM',
-      description: 'Tension headache, pressure around temples',
-      triggers: ['Stress', 'Screen time']
-    },
-    { 
-      id: '2', 
-      symptom: 'Fatigue', 
-      severity: 2, 
-      date: 'Yesterday', 
-      time: '10:15 AM',
-      description: 'General tiredness, low energy',
-      triggers: ['Poor sleep']
-    },
-    { 
-      id: '3', 
-      symptom: 'Nausea', 
-      severity: 4, 
-      date: '2 days ago', 
-      time: '6:45 PM',
-      description: 'Strong nausea after eating, lasted 2 hours',
-      triggers: ['Spicy food']
-    },
-  ]);
+  const { symptoms, loading } = useSymptoms();
+  const { user } = useAuthContext();
+  
+  // Get recent symptoms (last 3)
+  const recentSymptoms = symptoms.slice(0, 3);
+  
+  // Calculate stats
+  const todaySymptoms = symptoms.filter(s => s.date === new Date().toLocaleDateString()).length;
+  const avgSeverity = symptoms.length > 0 
+    ? (symptoms.reduce((sum, s) => sum + s.severity, 0) / symptoms.length).toFixed(1)
+    : '0';
+  const goodDaysPercent = symptoms.length > 0
+    ? Math.round((symptoms.filter(s => s.severity <= 2).length / symptoms.length) * 100)
+    : 100;
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning!';
+    if (hour < 18) return 'Good afternoon!';
+    return 'Good evening!';
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -56,7 +40,7 @@ export default function Dashboard() {
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <View>
-              <Text style={styles.greeting}>Good morning!</Text>
+              <Text style={styles.greeting}>{getGreeting()}</Text>
               <Text style={styles.subtitle}>How are you feeling today?</Text>
             </View>
             <Image 
@@ -81,7 +65,7 @@ export default function Dashboard() {
           <View style={styles.secondaryActions}>
             <BaseButton
               title="View Trends"
-              onPress={() => {}}
+              onPress={() => router.push('/(tabs)/symptoms')}
               variant="outline"
               size="md"
               style={styles.secondaryAction}
@@ -102,17 +86,17 @@ export default function Dashboard() {
           <Text style={styles.cardTitle}>Today's Summary</Text>
           <View style={styles.summaryStats}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>2</Text>
+              <Text style={styles.statNumber}>{todaySymptoms}</Text>
               <Text style={styles.statLabel}>Symptoms Logged</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>7.5</Text>
-              <Text style={styles.statLabel}>Avg. Wellness</Text>
+              <Text style={styles.statNumber}>{avgSeverity}</Text>
+              <Text style={styles.statLabel}>Avg. Severity</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>85%</Text>
+              <Text style={styles.statNumber}>{goodDaysPercent}%</Text>
               <Text style={styles.statLabel}>Good Days</Text>
             </View>
           </View>
@@ -130,15 +114,26 @@ export default function Dashboard() {
             />
           </View>
           
-          {recentSymptoms.map((symptom) => (
-            <SymptomCard
-              key={symptom.id}
-              {...symptom}
-              onPress={() => {
-                // Navigate to symptom detail
-              }}
-            />
-          ))}
+          {loading ? (
+            <BaseCard variant="outlined" style={styles.loadingCard}>
+              <Text style={styles.loadingText}>Loading symptoms...</Text>
+            </BaseCard>
+          ) : recentSymptoms.length > 0 ? (
+            recentSymptoms.map((symptom) => (
+              <SymptomCard
+                key={symptom.id}
+                {...symptom}
+                onPress={() => {
+                  // Navigate to symptom detail when implemented
+                }}
+              />
+            ))
+          ) : (
+            <BaseCard variant="outlined" style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No symptoms logged yet</Text>
+              <Text style={styles.emptySubtext}>Tap "Log New Symptom" to get started</Text>
+            </BaseCard>
+          )}
         </View>
 
         {/* Guardian Tip */}
@@ -279,6 +274,36 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.semiBold,
     fontSize: theme.typography.fontSize.lg,
     color: theme.colors.text.primary,
+  },
+  
+  loadingCard: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing['2xl'],
+  },
+  
+  loadingText: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.secondary,
+  },
+  
+  emptyCard: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing['2xl'],
+  },
+  
+  emptyText: {
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.sm,
+  },
+  
+  emptySubtext: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.tertiary,
+    textAlign: 'center',
   },
   
   tipCard: {

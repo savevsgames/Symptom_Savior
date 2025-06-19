@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Plus, X, Camera, MapPin } from 'lucide-react-native';
+import { ArrowLeft, Plus, X } from 'lucide-react-native';
 import { BaseButton, BaseTextInput, BaseCard } from '@/components/ui';
+import { useSymptoms } from '@/hooks/useSymptoms';
 import { theme } from '@/lib/theme';
 
 export default function AddSymptom() {
@@ -13,6 +14,9 @@ export default function AddSymptom() {
   const [description, setDescription] = useState('');
   const [triggers, setTriggers] = useState<string[]>([]);
   const [newTrigger, setNewTrigger] = useState('');
+  const [saving, setSaving] = useState(false);
+  
+  const { addSymptom } = useSymptoms();
 
   const commonSymptoms = [
     'Headache', 'Fatigue', 'Nausea', 'Dizziness', 'Joint Pain',
@@ -45,7 +49,7 @@ export default function AddSymptom() {
     setTriggers(triggers.filter(trigger => trigger !== triggerToRemove));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const symptomName = selectedSymptom || customSymptom;
     
     if (!symptomName.trim()) {
@@ -53,11 +57,31 @@ export default function AddSymptom() {
       return;
     }
 
-    Alert.alert(
-      'Symptom Logged',
-      `Your ${symptomName.toLowerCase()} has been recorded successfully.`,
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+    setSaving(true);
+    
+    try {
+      const { error } = await addSymptom({
+        symptom: symptomName.trim(),
+        severity,
+        description: description.trim(),
+        triggers,
+      });
+
+      if (error) {
+        Alert.alert('Error', 'Failed to save symptom. Please try again.');
+        return;
+      }
+
+      Alert.alert(
+        'Symptom Logged',
+        `Your ${symptomName.toLowerCase()} has been recorded successfully.`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -186,13 +210,15 @@ export default function AddSymptom() {
               value={newTrigger}
               onChangeText={setNewTrigger}
               containerStyle={styles.customTriggerInput}
+              onSubmitEditing={() => addTrigger(newTrigger)}
             />
             <BaseButton
-              title=""
+              title="Add"
               onPress={() => addTrigger(newTrigger)}
               variant="outline"
               size="md"
               style={styles.addTriggerButton}
+              disabled={!newTrigger.trim()}
             />
           </View>
 
@@ -212,27 +238,6 @@ export default function AddSymptom() {
             </View>
           )}
         </BaseCard>
-
-        {/* Additional Options */}
-        <BaseCard style={styles.section}>
-          <Text style={styles.sectionTitle}>Additional Options</Text>
-          <View style={styles.optionsContainer}>
-            <BaseButton
-              title="Add Photo"
-              onPress={() => {}}
-              variant="outline"
-              size="md"
-              style={styles.optionButton}
-            />
-            <BaseButton
-              title="Add Location"
-              onPress={() => {}}
-              variant="outline"
-              size="md"
-              style={styles.optionButton}
-            />
-          </View>
-        </BaseCard>
       </ScrollView>
 
       {/* Save Button */}
@@ -240,6 +245,8 @@ export default function AddSymptom() {
         <BaseButton
           title="Save Symptom"
           onPress={handleSave}
+          loading={saving}
+          disabled={saving}
           variant="primary"
           size="lg"
           fullWidth
@@ -416,8 +423,8 @@ const styles = StyleSheet.create({
   },
   
   addTriggerButton: {
-    width: 48,
     height: 48,
+    paddingHorizontal: theme.spacing.lg,
   },
   
   selectedTriggers: {
@@ -452,15 +459,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.warning[700],
     marginRight: theme.spacing.xs,
-  },
-  
-  optionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  
-  optionButton: {
-    flex: 0.48,
   },
   
   saveContainer: {

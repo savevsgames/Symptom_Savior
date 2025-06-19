@@ -1,72 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, Plus, TrendingUp } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { BaseTextInput, BaseButton, BaseCard, SymptomCard } from '@/components/ui';
+import { useSymptoms } from '@/hooks/useSymptoms';
 import { theme } from '@/lib/theme';
-
-interface SymptomEntry {
-  id: string;
-  symptom: string;
-  severity: number;
-  description: string;
-  date: string;
-  time: string;
-  triggers?: string[];
-}
 
 export default function Symptoms() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
-  
-  const [symptoms] = useState<SymptomEntry[]>([
-    {
-      id: '1',
-      symptom: 'Headache',
-      severity: 3,
-      description: 'Tension headache, pressure around temples',
-      date: 'Today',
-      time: '2:30 PM',
-      triggers: ['Stress', 'Screen time']
-    },
-    {
-      id: '2',
-      symptom: 'Fatigue',
-      severity: 2,
-      description: 'General tiredness, low energy',
-      date: 'Yesterday',
-      time: '10:15 AM',
-      triggers: ['Poor sleep']
-    },
-    {
-      id: '3',
-      symptom: 'Nausea',
-      severity: 4,
-      description: 'Strong nausea after eating, lasted 2 hours',
-      date: '2 days ago',
-      time: '6:45 PM',
-      triggers: ['Spicy food']
-    },
-    {
-      id: '4',
-      symptom: 'Joint Pain',
-      severity: 2,
-      description: 'Mild stiffness in knees and wrists',
-      date: '3 days ago',
-      time: '8:00 AM',
-      triggers: ['Weather', 'Activity']
-    },
-    {
-      id: '5',
-      symptom: 'Dizziness',
-      severity: 3,
-      description: 'Light-headed when standing up',
-      date: '4 days ago',
-      time: '11:30 AM',
-      triggers: ['Dehydration']
-    },
-  ]);
+  const { symptoms, loading, refetch } = useSymptoms();
 
   const filterOptions = [
     { key: 'all', label: 'All' },
@@ -77,7 +21,7 @@ export default function Symptoms() {
 
   const filteredSymptoms = symptoms.filter(symptom => {
     const matchesSearch = symptom.symptom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         symptom.description.toLowerCase().includes(searchQuery.toLowerCase());
+                         (symptom.description && symptom.description.toLowerCase().includes(searchQuery.toLowerCase()));
     
     if (selectedFilter === 'all') return matchesSearch;
     if (selectedFilter === 'mild') return matchesSearch && symptom.severity <= 2;
@@ -136,7 +80,14 @@ export default function Symptoms() {
             <Text style={styles.statLabel}>Total Entries</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>3</Text>
+            <Text style={styles.statNumber}>
+              {symptoms.filter(s => {
+                const today = new Date();
+                const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                const symptomDate = new Date(s.created_at);
+                return symptomDate >= weekAgo;
+              }).length}
+            </Text>
             <Text style={styles.statLabel}>This Week</Text>
           </View>
           <TouchableOpacity style={styles.statItem}>
@@ -147,23 +98,47 @@ export default function Symptoms() {
       </BaseCard>
 
       {/* Symptoms List */}
-      <ScrollView style={styles.symptomsList} showsVerticalScrollIndicator={false}>
-        {filteredSymptoms.map((symptom) => (
-          <SymptomCard
-            key={symptom.id}
-            {...symptom}
-            onPress={() => {
-              // Navigate to symptom detail
-            }}
-          />
-        ))}
-        
-        {filteredSymptoms.length === 0 && (
+      <ScrollView 
+        style={styles.symptomsList} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={refetch} />
+        }
+      >
+        {loading && symptoms.length === 0 ? (
+          <BaseCard variant="outlined" style={styles.loadingState}>
+            <Text style={styles.loadingText}>Loading symptoms...</Text>
+          </BaseCard>
+        ) : filteredSymptoms.length > 0 ? (
+          filteredSymptoms.map((symptom) => (
+            <SymptomCard
+              key={symptom.id}
+              {...symptom}
+              onPress={() => {
+                // Navigate to symptom detail when implemented
+              }}
+            />
+          ))
+        ) : (
           <BaseCard variant="outlined" style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No symptoms found</Text>
-            <Text style={styles.emptyStateSubtext}>
-              {searchQuery ? 'Try adjusting your search or filters' : 'Start tracking your symptoms'}
+            <Text style={styles.emptyStateText}>
+              {searchQuery || selectedFilter !== 'all' ? 'No symptoms found' : 'No symptoms logged yet'}
             </Text>
+            <Text style={styles.emptyStateSubtext}>
+              {searchQuery || selectedFilter !== 'all' 
+                ? 'Try adjusting your search or filters' 
+                : 'Start tracking your symptoms to see them here'
+              }
+            </Text>
+            {!searchQuery && selectedFilter === 'all' && (
+              <BaseButton
+                title="Log Your First Symptom"
+                onPress={() => router.push('/add-symptom')}
+                variant="primary"
+                size="md"
+                style={styles.emptyStateButton}
+              />
+            )}
           </BaseCard>
         )}
       </ScrollView>
@@ -251,6 +226,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing['2xl'],
   },
   
+  loadingState: {
+    alignItems: 'center',
+    paddingVertical: theme.spacing['4xl'],
+  },
+  
+  loadingText: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.secondary,
+  },
+  
   emptyState: {
     alignItems: 'center',
     paddingVertical: theme.spacing['4xl'],
@@ -268,5 +254,10 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.text.tertiary,
     textAlign: 'center',
+    marginBottom: theme.spacing.lg,
+  },
+  
+  emptyStateButton: {
+    marginTop: theme.spacing.md,
   },
 });
