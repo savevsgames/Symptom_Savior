@@ -12,7 +12,7 @@ interface AppConfig {
   
   // AI Services
   ai: {
-    txAgentUrl: string;
+    txAgentUrl: string | undefined;
   };
   
   // Voice Services
@@ -68,7 +68,8 @@ export const Config: AppConfig = {
   },
   
   ai: {
-    txAgentUrl: requireEnv('EXPO_PUBLIC_TXAGENT_URL', process.env.EXPO_PUBLIC_TXAGENT_URL),
+    // Make txAgentUrl optional - don't use requireEnv for this one
+    txAgentUrl: process.env.EXPO_PUBLIC_TXAGENT_URL,
   },
   
   voice: {
