@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Send, Bot, User, Heart, AlertTriangle, Mic, MicOff, Volume2, VolumeX } from 'lucide-react-native';
+import { Send, Bot, User, Heart, TriangleAlert as AlertTriangle, Mic, MicOff, Volume2, VolumeX } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import { useProfile } from '@/hooks/useProfile';
 import { useSymptoms } from '@/hooks/useSymptoms';
