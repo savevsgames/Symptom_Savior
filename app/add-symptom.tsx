@@ -12,8 +12,7 @@ export default function AddSymptom() {
   const [customSymptom, setCustomSymptom] = useState('');
   const [severity, setSeverity] = useState(1);
   const [description, setDescription] = useState('');
-  const [triggers, setTriggers] = useState<string[]>([]);
-  const [newTrigger, setNewTrigger] = useState('');
+  const [triggers, setTriggers] = useState('');
   const [duration, setDuration] = useState('');
   const [location, setLocation] = useState('');
   const [saving, setSaving] = useState(false);
@@ -44,17 +43,6 @@ export default function AddSymptom() {
     theme.colors.error[600]
   ];
 
-  const addTrigger = (trigger: string) => {
-    if (trigger && !triggers.includes(trigger)) {
-      setTriggers([...triggers, trigger]);
-      setNewTrigger('');
-    }
-  };
-
-  const removeTrigger = (triggerToRemove: string) => {
-    setTriggers(triggers.filter(trigger => trigger !== triggerToRemove));
-  };
-
   const handleSave = async () => {
     const symptomName = selectedSymptom || customSymptom;
     
@@ -72,10 +60,10 @@ export default function AddSymptom() {
     
     try {
       const symptomData = {
-        symptom: symptomName.trim(),
+        symptom_name: symptomName.trim(),
         severity,
         description: description.trim() || undefined,
-        triggers: triggers.length > 0 ? triggers : undefined,
+        triggers: triggers.trim() || undefined,
         duration_hours: duration ? parseInt(duration) : undefined,
         location: location.trim() || undefined,
       };
@@ -255,9 +243,9 @@ export default function AddSymptom() {
                 ]}
                 onPress={() => {
                   if (triggers.includes(trigger)) {
-                    removeTrigger(trigger);
+                    setTriggers(triggers.replace(trigger, '').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim());
                   } else {
-                    addTrigger(trigger);
+                    setTriggers(triggers ? `${triggers}, ${trigger}` : trigger);
                   }
                 }}
               >
@@ -271,39 +259,12 @@ export default function AddSymptom() {
             ))}
           </View>
 
-          <View style={styles.customTriggerContainer}>
-            <BaseTextInput
-              placeholder="Add custom trigger..."
-              value={newTrigger}
-              onChangeText={setNewTrigger}
-              containerStyle={styles.customTriggerInput}
-              onSubmitEditing={() => addTrigger(newTrigger)}
-            />
-            <BaseButton
-              title="Add"
-              onPress={() => addTrigger(newTrigger)}
-              variant="outline"
-              size="md"
-              style={styles.addTriggerButton}
-              disabled={!newTrigger.trim()}
-            />
-          </View>
-
-          {triggers.length > 0 && (
-            <View style={styles.selectedTriggers}>
-              <Text style={styles.selectedTriggersTitle}>Selected triggers:</Text>
-              <View style={styles.selectedTriggersList}>
-                {triggers.map((trigger, index) => (
-                  <View key={index} style={styles.selectedTriggerTag}>
-                    <Text style={styles.selectedTriggerText}>{trigger}</Text>
-                    <TouchableOpacity onPress={() => removeTrigger(trigger)}>
-                      <X size={16} color={theme.colors.text.secondary} strokeWidth={2} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          <BaseTextInput
+            placeholder="Add custom triggers (comma-separated)..."
+            value={triggers}
+            onChangeText={setTriggers}
+            containerStyle={styles.customTriggerInput}
+          />
         </BaseCard>
       </ScrollView>
 
@@ -515,55 +476,8 @@ const styles = StyleSheet.create({
     color: theme.colors.text.inverse,
   },
   
-  customTriggerContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: theme.spacing.lg,
-  },
-  
   customTriggerInput: {
-    flex: 1,
-    marginRight: theme.spacing.sm,
     marginBottom: 0,
-  },
-  
-  addTriggerButton: {
-    height: 48,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  
-  selectedTriggers: {
-    marginTop: theme.spacing.sm,
-  },
-  
-  selectedTriggersTitle: {
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.text.secondary,
-    marginBottom: theme.spacing.sm,
-  },
-  
-  selectedTriggersList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  
-  selectedTriggerTag: {
-    backgroundColor: theme.colors.warning[100],
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.md,
-    marginRight: theme.spacing.sm,
-    marginBottom: theme.spacing.xs,
-  },
-  
-  selectedTriggerText: {
-    fontFamily: theme.typography.fontFamily.regular,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.warning[700],
-    marginRight: theme.spacing.xs,
   },
   
   saveContainer: {

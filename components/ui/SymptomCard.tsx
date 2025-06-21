@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Calendar, Clock } from 'lucide-react-native';
+import { Calendar, Clock, MapPin } from 'lucide-react-native';
 import { BaseCard } from './BaseCard';
 import { theme } from '@/lib/theme';
 
@@ -11,7 +11,9 @@ export interface SymptomCardProps {
   description?: string;
   date: string;
   time: string;
-  triggers?: string[];
+  triggers?: string;
+  duration_hours?: number;
+  location?: string;
   onPress?: () => void;
 }
 
@@ -22,18 +24,24 @@ export function SymptomCard({
   date,
   time,
   triggers,
+  duration_hours,
+  location,
   onPress,
 }: SymptomCardProps) {
   const getSeverityColor = (severity: number) => {
     if (severity <= 2) return theme.colors.success[500];
-    if (severity <= 3) return theme.colors.warning[500];
-    return theme.colors.error[500];
+    if (severity <= 4) return theme.colors.warning[400];
+    if (severity <= 6) return theme.colors.warning[500];
+    if (severity <= 8) return theme.colors.error[500];
+    return theme.colors.error[600];
   };
 
   const getSeverityText = (severity: number) => {
-    if (severity <= 2) return 'Mild';
-    if (severity <= 3) return 'Moderate';
-    return 'Severe';
+    if (severity <= 2) return 'Minimal';
+    if (severity <= 4) return 'Mild';
+    if (severity <= 6) return 'Moderate';
+    if (severity <= 8) return 'Severe';
+    return 'Very Severe';
   };
 
   const CardWrapper = onPress ? TouchableOpacity : View;
@@ -45,7 +53,7 @@ export function SymptomCard({
           <View style={styles.symptomInfo}>
             <Text style={styles.symptomName}>{symptom}</Text>
             <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(severity) }]}>
-              <Text style={styles.severityText}>{getSeverityText(severity)}</Text>
+              <Text style={styles.severityText}>{severity}/10</Text>
             </View>
           </View>
           
@@ -61,27 +69,43 @@ export function SymptomCard({
           </View>
         </View>
 
+        {location && (
+          <View style={styles.locationContainer}>
+            <MapPin size={14} color={theme.colors.text.tertiary} strokeWidth={2} />
+            <Text style={styles.locationText}>{location}</Text>
+          </View>
+        )}
+
         {description && (
           <Text style={styles.description} numberOfLines={2}>
             {description}
           </Text>
         )}
 
-        {triggers && triggers.length > 0 && (
-          <View style={styles.triggersContainer}>
-            <Text style={styles.triggersLabel}>Triggers:</Text>
-            <View style={styles.triggersList}>
-              {triggers.slice(0, 3).map((trigger, index) => (
-                <View key={index} style={styles.triggerTag}>
-                  <Text style={styles.triggerText}>{trigger}</Text>
-                </View>
-              ))}
-              {triggers.length > 3 && (
-                <Text style={styles.moreTriggersText}>+{triggers.length - 3} more</Text>
-              )}
-            </View>
+        {duration_hours && (
+          <View style={styles.durationContainer}>
+            <Clock size={14} color={theme.colors.text.tertiary} strokeWidth={2} />
+            <Text style={styles.durationText}>
+              Duration: {duration_hours} hour{duration_hours !== 1 ? 's' : ''}
+            </Text>
           </View>
         )}
+
+        {triggers && (
+          <View style={styles.triggersContainer}>
+            <Text style={styles.triggersLabel}>Triggers:</Text>
+            <Text style={styles.triggersText} numberOfLines={1}>
+              {triggers}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.severityIndicator}>
+          <Text style={styles.severityLabel}>Severity: </Text>
+          <Text style={[styles.severityValue, { color: getSeverityColor(severity) }]}>
+            {getSeverityText(severity)}
+          </Text>
+        </View>
       </BaseCard>
     </CardWrapper>
   );
@@ -140,6 +164,19 @@ const styles = StyleSheet.create({
     marginLeft: theme.spacing.xs,
   },
   
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.sm,
+  },
+  
+  locationText: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
+    marginLeft: theme.spacing.xs,
+  },
+  
   description: {
     fontFamily: theme.typography.fontFamily.regular,
     fontSize: theme.typography.fontSize.sm,
@@ -148,8 +185,21 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   
+  durationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.sm,
+  },
+  
+  durationText: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
+    marginLeft: theme.spacing.xs,
+  },
+  
   triggersContainer: {
-    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
   },
   
   triggersLabel: {
@@ -159,31 +209,26 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xs,
   },
   
-  triggersList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  
-  triggerTag: {
-    backgroundColor: theme.colors.background.tertiary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.sm,
-    marginRight: theme.spacing.sm,
-    marginBottom: theme.spacing.xs,
-  },
-  
-  triggerText: {
+  triggersText: {
     fontFamily: theme.typography.fontFamily.regular,
-    fontSize: theme.typography.fontSize.xs,
+    fontSize: theme.typography.fontSize.sm,
     color: theme.colors.text.secondary,
   },
   
-  moreTriggersText: {
+  severityIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: theme.spacing.xs,
+  },
+  
+  severityLabel: {
     fontFamily: theme.typography.fontFamily.regular,
-    fontSize: theme.typography.fontSize.xs,
-    color: theme.colors.text.tertiary,
-    fontStyle: 'italic',
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
+  },
+  
+  severityValue: {
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.sm,
   },
 });
