@@ -60,9 +60,22 @@ export default function Assistant() {
   const buildUserContext = () => {
     if (!profile) return null;
 
+    // Calculate age from date of birth
+    const calculateAge = (dateOfBirth: string) => {
+      const today = new Date();
+      const birthDate = new Date(dateOfBirth);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    };
+
     const context = {
       user_profile: {
-        age: profile.date_of_birth ? Math.floor((new Date().getTime() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : null,
+        full_name: profile.full_name,
+        age: profile.date_of_birth ? calculateAge(profile.date_of_birth) : null,
         gender: profile.gender,
         blood_group: profile.blood_group,
         height_cm: profile.height_cm,
@@ -290,7 +303,7 @@ export default function Assistant() {
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <Image 
-              source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+              source={{ uri: 'https://images.pexels.com/photos/4386467/pexels-photo-4386467.jpeg' }}
               style={styles.characterAvatar}
               resizeMode="contain"
             />
@@ -341,7 +354,7 @@ export default function Assistant() {
                 ]}>
                   {message.isBot ? (
                     <Image 
-                      source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+                      source={{ uri: 'https://images.pexels.com/photos/4386467/pexels-photo-4386467.jpeg' }}
                       style={styles.messageAvatar}
                       resizeMode="contain"
                     />
@@ -415,7 +428,7 @@ export default function Assistant() {
               <View style={styles.messageHeader}>
                 <View style={styles.botAvatar}>
                   <Image 
-                    source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+                    source={{ uri: 'https://images.pexels.com/photos/4386467/pexels-photo-4386467.jpeg' }}
                     style={styles.messageAvatar}
                     resizeMode="contain"
                   />
