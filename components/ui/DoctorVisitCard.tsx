@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Calendar, MapPin, Phone, Mail, FileText, AlertCircle, User } from 'lucide-react-native';
+import { Calendar, MapPin, Phone, Mail, FileText, CircleAlert as AlertCircle, User } from 'lucide-react-native';
 import { BaseCard } from './BaseCard';
 import { theme } from '@/lib/theme';
 
