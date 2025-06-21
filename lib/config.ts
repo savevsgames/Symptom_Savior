@@ -68,7 +68,7 @@ export const Config: AppConfig = {
   },
   
   ai: {
-    // Make txAgentUrl optional - don't use requireEnv for this one
+    // TxAgent URL is optional - app works in offline mode without it
     txAgentUrl: process.env.EXPO_PUBLIC_TXAGENT_URL,
   },
   
@@ -104,7 +104,7 @@ if (Config.features.debug && __DEV__) {
     },
     features: Config.features,
     ai: {
-      txAgentUrl: Config.ai.txAgentUrl ? '✅ Set' : '❌ Missing',
+      txAgentUrl: Config.ai.txAgentUrl ? '✅ Set' : '❌ Missing (offline mode)',
     },
     voice: {
       elevenLabsApiKey: Config.voice.elevenLabsApiKey ? '✅ Set' : '❌ Missing',

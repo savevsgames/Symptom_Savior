@@ -8,32 +8,32 @@ import { theme } from '@/lib/theme';
 export default function RootIndex() {
   const { isAuthenticated, initialized, loading } = useAuthContext();
 
-  // Check if AI Container URL is configured
-  if (!Config.ai.txAgentUrl) {
-    return (
-      <View style={styles.configErrorContainer}>
-        <View style={styles.errorCard}>
-          <Text style={styles.errorTitle}>⚙️ Configuration Required</Text>
-          <Text style={styles.errorMessage}>
-            The AI Container URL is not configured. Please set the following environment variable in your .env file:
-          </Text>
-          <View style={styles.codeBlock}>
-            <Text style={styles.codeText}>EXPO_PUBLIC_TXAGENT_URL=your_txagent_url_here</Text>
-          </View>
-          <Text style={styles.errorSubtext}>
-            After adding this variable, restart the development server to continue.
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   // Show loading screen while authentication state is being determined
   if (!initialized || loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={theme.colors.primary[500]} />
         <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Show configuration status if TxAgent URL is missing
+  if (!Config.ai.txAgentUrl && Config.features.debug) {
+    return (
+      <View style={styles.configContainer}>
+        <View style={styles.configCard}>
+          <Text style={styles.configTitle}>⚙️ Configuration Status</Text>
+          <Text style={styles.configMessage}>
+            TxAgent URL not configured. The app will work in offline mode with fallback responses.
+          </Text>
+          <View style={styles.codeBlock}>
+            <Text style={styles.codeText}>EXPO_PUBLIC_TXAGENT_URL=your_txagent_url_here</Text>
+          </View>
+          <Text style={styles.configSubtext}>
+            Add this to your .env file to enable full AI integration.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
   },
 
-  configErrorContainer: {
+  configContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing['2xl'],
   },
 
-  errorCard: {
+  configCard: {
     backgroundColor: theme.colors.background.primary,
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing['2xl'],
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     borderLeftColor: theme.colors.warning[500],
   },
 
-  errorTitle: {
+  configTitle: {
     fontFamily: theme.typography.fontFamily.bold,
     fontSize: theme.typography.fontSize.xl,
     color: theme.colors.text.primary,
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  errorMessage: {
+  configMessage: {
     fontFamily: theme.typography.fontFamily.regular,
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.secondary,
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  errorSubtext: {
+  configSubtext: {
     fontFamily: theme.typography.fontFamily.regular,
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.text.tertiary,

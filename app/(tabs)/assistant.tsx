@@ -1,29 +1,45 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Send, Bot, User, Heart } from 'lucide-react-native';
+import { Send, Bot, User, Heart, AlertTriangle, Mic, MicOff, Volume2, VolumeX } from 'lucide-react-native';
+import { Audio } from 'expo-av';
 import { useProfile } from '@/hooks/useProfile';
 import { useSymptoms } from '@/hooks/useSymptoms';
+import { callTxAgent, logConsultation, detectEmergency, generateFallbackResponse, transcribeAudio, type TxAgentRequest, type TxAgentResponse } from '@/lib/api';
+import { Config } from '@/lib/config';
+import { logger } from '@/utils/logger';
 
 interface Message {
   id: string;
   text: string;
   isBot: boolean;
   timestamp: Date;
+  sources?: Array<{
+    title: string;
+    content: string;
+    relevance_score: number;
+  }>;
+  voiceUrl?: string;
+  emergencyDetected?: boolean;
+  disclaimer?: string;
 }
 
 export default function Assistant() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Hello! I'm your Symptom Savior AI Assistant. I'm here to help you track your symptoms, understand your health patterns, and provide supportive guidance. How are you feeling today?",
+      text: "Hello! I'm your Symptom Savior AI Assistant. I'm here to help you track your symptoms, understand your health patterns, and provide evidence-based medical guidance. How are you feeling today?",
       isBot: true,
       timestamp: new Date(),
     }
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [contextInitialized, setContextInitialized] = useState(false);
+  const [sessionId, setSessionId] = useState<string>(`session_${Date.now()}`);
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Get user profile and health data
@@ -42,130 +58,50 @@ export default function Assistant() {
   }, [messages]);
 
   const buildUserContext = () => {
-    if (!profile) return '';
+    if (!profile) return null;
 
-    let context = '\n--- Patient Context ---\n';
-    
-    // Basic demographics
-    if (profile.full_name) {
-      context += `Patient: ${profile.full_name}\n`;
-    }
-    
-    if (profile.date_of_birth) {
-      const age = Math.floor((new Date().getTime() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-      context += `Age: ${age} years old\n`;
-    }
-    
-    if (profile.gender) {
-      context += `Gender: ${profile.gender}\n`;
-    }
+    const context = {
+      user_profile: {
+        age: profile.date_of_birth ? Math.floor((new Date().getTime() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : null,
+        gender: profile.gender,
+        blood_group: profile.blood_group,
+        height_cm: profile.height_cm,
+        weight_kg: profile.weight_kg,
+      },
+      medical_conditions: conditions.map(c => ({
+        name: c.condition_name,
+        severity: c.severity,
+        diagnosed_on: c.diagnosed_on,
+        notes: c.notes,
+      })),
+      current_medications: medications.map(m => ({
+        name: m.medication_name,
+        dose: m.dose,
+        frequency: m.frequency,
+        started_on: m.started_on,
+        prescribing_doctor: m.prescribing_doctor,
+      })),
+      allergies: allergies.map(a => ({
+        allergen: a.allergen,
+        reaction: a.reaction,
+        severity: a.severity,
+      })),
+      recent_symptoms: symptoms.slice(0, 10).map(s => ({
+        symptom: s.symptom,
+        severity: s.severity,
+        date: s.date,
+        triggers: s.triggers,
+        location: s.location,
+        description: s.description,
+      })),
+      recent_visits: doctorVisits.slice(0, 3).map(v => ({
+        date: new Date(v.visit_ts).toLocaleDateString(),
+        doctor_name: v.doctor_name,
+        summary: v.visit_summary,
+        follow_up_required: v.follow_up_required,
+      })),
+    };
 
-    if (profile.blood_group && profile.blood_group !== 'unknown') {
-      context += `Blood Type: ${profile.blood_group}\n`;
-    }
-
-    // Medical conditions
-    if (conditions.length > 0) {
-      context += `\nMedical Conditions:\n`;
-      conditions.forEach(condition => {
-        context += `- ${condition.condition_name}`;
-        if (condition.severity) {
-          context += ` (severity: ${condition.severity}/10)`;
-        }
-        if (condition.diagnosed_on) {
-          context += ` diagnosed ${condition.diagnosed_on}`;
-        }
-        context += '\n';
-      });
-    }
-
-    // Current medications
-    if (medications.length > 0) {
-      context += `\nCurrent Medications:\n`;
-      medications.forEach(medication => {
-        context += `- ${medication.medication_name}`;
-        if (medication.dose) {
-          context += ` ${medication.dose}`;
-        }
-        if (medication.frequency) {
-          context += ` ${medication.frequency}`;
-        }
-        context += '\n';
-      });
-    }
-
-    // Allergies
-    if (allergies.length > 0) {
-      context += `\nKnown Allergies:\n`;
-      allergies.forEach(allergy => {
-        context += `- ${allergy.allergen}`;
-        if (allergy.severity) {
-          context += ` (severity: ${allergy.severity}/10)`;
-        }
-        if (allergy.reaction) {
-          context += ` - reaction: ${allergy.reaction}`;
-        }
-        context += '\n';
-      });
-    }
-
-    // Recent symptoms (last 10)
-    const recentSymptoms = symptoms.slice(0, 10);
-    if (recentSymptoms.length > 0) {
-      context += `\nRecent Symptoms (last 10):\n`;
-      recentSymptoms.forEach(symptom => {
-        context += `- ${symptom.symptom} (severity: ${symptom.severity}/10)`;
-        if (symptom.date) {
-          context += ` on ${symptom.date}`;
-        }
-        if (symptom.triggers) {
-          context += ` - triggers: ${symptom.triggers}`;
-        }
-        if (symptom.location) {
-          context += ` - location: ${symptom.location}`;
-        }
-        context += '\n';
-      });
-    }
-
-    // Recent treatments (last 10)
-    const recentTreatments = treatments.slice(0, 10);
-    if (recentTreatments.length > 0) {
-      context += `\nRecent Treatments (last 10):\n`;
-      recentTreatments.forEach(treatment => {
-        context += `- ${treatment.name} (${treatment.treatment_type})`;
-        if (treatment.dosage) {
-          context += ` - ${treatment.dosage}`;
-        }
-        if (treatment.doctor_recommended) {
-          context += ' - doctor recommended';
-        }
-        if (treatment.completed) {
-          context += ' - completed';
-        } else {
-          context += ' - ongoing';
-        }
-        context += '\n';
-      });
-    }
-
-    // Most recent doctor visit
-    if (doctorVisits.length > 0) {
-      const lastVisit = doctorVisits[0]; // Already sorted by most recent
-      context += `\nMost Recent Doctor Visit:\n`;
-      context += `- Date: ${new Date(lastVisit.visit_ts).toLocaleDateString()}\n`;
-      if (lastVisit.doctor_name) {
-        context += `- Doctor: ${lastVisit.doctor_name}\n`;
-      }
-      if (lastVisit.visit_summary) {
-        context += `- Summary: ${lastVisit.visit_summary}\n`;
-      }
-      if (lastVisit.follow_up_required) {
-        context += `- Follow-up required: Yes\n`;
-      }
-    }
-
-    context += '--- End Patient Context ---\n\n';
     return context;
   };
 
@@ -184,166 +120,212 @@ export default function Assistant() {
     setInputText('');
     setIsTyping(true);
 
-    // Build context-enhanced query
-    let enhancedQuery = originalInput;
-    
-    // Add context if we have profile data and this is the first time or user explicitly asks for personalized advice
-    if (profile && (!contextInitialized || originalInput.toLowerCase().includes('my') || originalInput.toLowerCase().includes('personal'))) {
-      const context = buildUserContext();
-      enhancedQuery = context + 'User Question: ' + originalInput;
-      
-      if (!contextInitialized) {
+    try {
+      // Build context for personalized responses
+      const shouldUseContext = profile && (!contextInitialized || 
+        originalInput.toLowerCase().includes('my') || 
+        originalInput.toLowerCase().includes('personal') ||
+        originalInput.toLowerCase().includes('history'));
+
+      const context = shouldUseContext ? buildUserContext() : undefined;
+
+      if (shouldUseContext && !contextInitialized) {
         setContextInitialized(true);
       }
-    }
 
-    // Simulate AI response with context awareness
-    setTimeout(() => {
-      const botResponse = generateBotResponse(originalInput, enhancedQuery);
+      // Prepare TxAgent request
+      const request: TxAgentRequest = {
+        query: originalInput,
+        context,
+        include_voice: Config.features.enableVoice,
+        include_video: Config.features.enableVideoAvatar,
+        session_id: sessionId,
+      };
+
+      let response: TxAgentResponse;
+
+      try {
+        // Call TxAgent API
+        response = await callTxAgent(request);
+        
+        // Log the consultation
+        await logConsultation(request, response);
+      } catch (error) {
+        logger.error('TxAgent call failed, using fallback', error);
+        
+        // Use fallback response if TxAgent is unavailable
+        response = generateFallbackResponse(originalInput);
+        
+        // Show user-friendly error message
+        Alert.alert(
+          'Connection Issue',
+          'Having trouble connecting to the medical consultation service. Using offline guidance for now.',
+          [{ text: 'OK' }]
+        );
+      }
+
+      // Create bot message
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: botResponse,
+        text: response.response.text,
         isBot: true,
         timestamp: new Date(),
+        sources: response.response.sources,
+        voiceUrl: response.media?.voice_audio_url,
+        emergencyDetected: response.safety.emergency_detected,
+        disclaimer: response.safety.disclaimer,
       };
-      
+
       setMessages(prev => [...prev, botMessage]);
+
+      // Handle emergency detection
+      if (response.safety.emergency_detected) {
+        setTimeout(() => {
+          Alert.alert(
+            '🚨 Emergency Detected',
+            'Your symptoms may require immediate medical attention. If this is a medical emergency, please call emergency services immediately.',
+            [
+              { text: 'I understand', style: 'default' },
+              { 
+                text: 'Call Emergency Services', 
+                style: 'destructive',
+                onPress: () => {
+                  // Platform-specific emergency calling
+                  if (Platform.OS !== 'web') {
+                    // On mobile, this would open the phone dialer
+                    // Linking.openURL('tel:911');
+                  }
+                }
+              }
+            ]
+          );
+        }, 1000);
+      }
+
+      // Auto-play voice response if available
+      if (response.media?.voice_audio_url && Config.features.enableVoice) {
+        playAudioResponse(response.media.voice_audio_url, botMessage.id);
+      }
+
+    } catch (error) {
+      logger.error('Message sending failed', error);
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm sorry, I'm having trouble processing your request right now. Please try again in a moment. If you're experiencing a medical emergency, please contact emergency services immediately.",
+        isBot: true,
+        timestamp: new Date(),
+        emergencyDetected: detectEmergency(originalInput).isEmergency,
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
-  const generateBotResponse = (originalInput: string, enhancedQuery: string): string => {
-    const input = originalInput.toLowerCase();
-    
-    // Check if we have context to provide personalized responses
-    const hasContext = profile && (conditions.length > 0 || medications.length > 0 || symptoms.length > 0);
-    
-    if (input.includes('headache') || input.includes('head pain')) {
-      let response = "I'm sorry you're experiencing a headache. ";
+  const startRecording = async () => {
+    if (!Config.features.enableVoice) {
+      Alert.alert('Voice Disabled', 'Voice features are currently disabled.');
+      return;
+    }
+
+    try {
+      logger.debug('Starting audio recording');
       
-      if (hasContext) {
-        // Check for relevant conditions or medications
-        const headacheRelatedConditions = conditions.filter(c => 
-          c.condition_name.toLowerCase().includes('migraine') || 
-          c.condition_name.toLowerCase().includes('headache')
-        );
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant microphone permission to use voice input.');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecording(recording);
+      setIsRecording(true);
+      logger.info('Recording started');
+    } catch (error) {
+      logger.error('Failed to start recording', error);
+      Alert.alert('Recording Error', 'Failed to start voice recording. Please try again.');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) return;
+
+    try {
+      logger.debug('Stopping audio recording');
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (uri) {
+        // Convert recording to blob for transcription
+        const response = await fetch(uri);
+        const blob = await response.blob();
         
-        const recentHeadaches = symptoms.filter(s => 
-          s.symptom.toLowerCase().includes('headache') || 
-          s.symptom.toLowerCase().includes('head')
-        );
-        
-        if (headacheRelatedConditions.length > 0) {
-          response += `Given your history of ${headacheRelatedConditions[0].condition_name.toLowerCase()}, `;
-        }
-        
-        if (recentHeadaches.length > 1) {
-          response += `I notice you've logged ${recentHeadaches.length} headache episodes recently. `;
-        }
-        
-        // Check for relevant medications
-        const painMeds = medications.filter(m => 
-          m.medication_name.toLowerCase().includes('ibuprofen') ||
-          m.medication_name.toLowerCase().includes('acetaminophen') ||
-          m.medication_name.toLowerCase().includes('aspirin')
-        );
-        
-        if (painMeds.length > 0) {
-          response += `You're currently taking ${painMeds[0].medication_name} which may help. `;
+        // Transcribe audio
+        setIsTyping(true);
+        try {
+          const transcription = await transcribeAudio(blob);
+          if (transcription.trim()) {
+            setInputText(transcription);
+            logger.info('Audio transcribed successfully', { length: transcription.length });
+          } else {
+            Alert.alert('No Speech Detected', 'Please try speaking more clearly or use text input.');
+          }
+        } catch (error) {
+          logger.error('Transcription failed', error);
+          Alert.alert('Transcription Error', 'Failed to convert speech to text. Please try typing your message.');
+        } finally {
+          setIsTyping(false);
         }
       }
-      
-      response += "For immediate relief, try resting in a quiet, dark room and staying hydrated. If headaches persist or worsen, please consider consulting with your healthcare provider. Would you like to log this symptom in your tracker?";
-      return response;
+    } catch (error) {
+      logger.error('Failed to stop recording', error);
+      Alert.alert('Recording Error', 'Failed to process voice recording.');
     }
-    
-    if (input.includes('log') || input.includes('track') || input.includes('record')) {
-      return "To log a new symptom, tap the 'Log New Symptom' button on your dashboard or go to the Symptoms tab and tap the '+' icon. You can record the symptom type, severity level, and any additional details. Regular tracking helps identify patterns!";
-    }
-    
-    if (input.includes('pattern') || input.includes('trend')) {
-      let response = "Your symptom patterns can reveal important insights! ";
-      
-      if (hasContext && symptoms.length > 0) {
-        const mostCommonSymptom = symptoms.reduce((acc, symptom) => {
-          acc[symptom.symptom] = (acc[symptom.symptom] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-        
-        const topSymptom = Object.entries(mostCommonSymptom).sort(([,a], [,b]) => b - a)[0];
-        
-        if (topSymptom) {
-          response += `Based on your recent entries, your most frequent symptom is ${topSymptom[0].toLowerCase()} (${topSymptom[1]} times logged). `;
+  };
+
+  const playAudioResponse = async (audioUrl: string, messageId: string) => {
+    try {
+      logger.debug('Playing audio response', { messageId });
+      setPlayingAudio(messageId);
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUrl },
+        { shouldPlay: true }
+      );
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setPlayingAudio(null);
+          sound.unloadAsync();
         }
-        
-        const avgSeverity = symptoms.reduce((sum, s) => sum + s.severity, 0) / symptoms.length;
-        response += `Your average symptom severity is ${avgSeverity.toFixed(1)}/10. `;
-      }
-      
-      response += "To view detailed analytics, tap 'View Trends' on your dashboard. Would you like me to summarize your recent symptom activity?";
-      return response;
+      });
+    } catch (error) {
+      logger.error('Failed to play audio response', error);
+      setPlayingAudio(null);
     }
-    
-    if (input.includes('anxious') || input.includes('anxiety') || input.includes('worried')) {
-      let response = "I understand that feeling anxious can be overwhelming. ";
-      
-      if (hasContext) {
-        const anxietyConditions = conditions.filter(c => 
-          c.condition_name.toLowerCase().includes('anxiety') || 
-          c.condition_name.toLowerCase().includes('depression')
-        );
-        
-        if (anxietyConditions.length > 0) {
-          response += `I see you have a history of ${anxietyConditions[0].condition_name.toLowerCase()}. `;
-        }
-        
-        const anxietyMeds = medications.filter(m => 
-          m.medication_name.toLowerCase().includes('sertraline') ||
-          m.medication_name.toLowerCase().includes('fluoxetine') ||
-          m.medication_name.toLowerCase().includes('lorazepam')
-        );
-        
-        if (anxietyMeds.length > 0) {
-          response += `You're currently taking ${anxietyMeds[0].medication_name} for this. `;
-        }
-      }
-      
-      response += "Take a moment to breathe deeply. Anxiety can sometimes be related to physical symptoms. If this is a new or concerning symptom, consider logging it and speaking with a healthcare provider. Remember, you're taking positive steps by tracking your health. Is there anything specific triggering your anxiety?";
-      return response;
+  };
+
+  const stopAudioPlayback = async () => {
+    try {
+      await Audio.setIsEnabledAsync(false);
+      await Audio.setIsEnabledAsync(true);
+      setPlayingAudio(null);
+    } catch (error) {
+      logger.error('Failed to stop audio playback', error);
     }
-    
-    if (input.includes('pain')) {
-      let response = "I'm sorry you're experiencing pain. ";
-      
-      if (hasContext) {
-        const painSymptoms = symptoms.filter(s => 
-          s.symptom.toLowerCase().includes('pain')
-        );
-        
-        if (painSymptoms.length > 0) {
-          const avgPainSeverity = painSymptoms.reduce((sum, s) => sum + s.severity, 0) / painSymptoms.length;
-          response += `Looking at your recent pain logs, your average pain level has been ${avgPainSeverity.toFixed(1)}/10. `;
-        }
-      }
-      
-      response += "Pain levels and triggers are important to track. Consider logging this symptom with details about location, intensity (1-10 scale), and any potential triggers. If pain is severe or persistent, please don't hesitate to contact your healthcare provider.";
-      return response;
-    }
-    
-    if (input.includes('thank') || input.includes('thanks')) {
-      return "You're very welcome! I'm here to support you on your health journey. Remember, consistent symptom tracking can provide valuable insights for both you and your healthcare team. Is there anything else I can help you with today?";
-    }
-    
-    // Default empathetic response with context if available
-    let response = "Thank you for sharing that with me. ";
-    
-    if (hasContext) {
-      response += "Based on your health profile and recent tracking, ";
-    }
-    
-    response += "every person's health journey is unique, and I'm here to support you. If you're experiencing concerning symptoms, please consider consulting with a healthcare professional. In the meantime, I can help you track symptoms, understand patterns, or guide you through using the app. What would be most helpful for you right now?";
-    
-    return response;
   };
 
   const sendQuickPrompt = (prompt: string) => {
@@ -373,9 +355,9 @@ export default function Assistant() {
               resizeMode="contain"
             />
             <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>Symptom Savior Assistant</Text>
+              <Text style={styles.headerTitle}>Medical AI Assistant</Text>
               <Text style={styles.headerSubtitle}>
-                {profile ? `Your personalized health guardian` : 'Your compassionate health guardian'}
+                {Config.ai.txAgentUrl ? 'Powered by TxAgent Medical RAG' : 'Offline Mode'}
               </Text>
             </View>
           </View>
@@ -387,6 +369,16 @@ export default function Assistant() {
             <Heart size={12} color="#10B981" strokeWidth={2} />
             <Text style={styles.contextText}>
               Personalized responses enabled • {conditions.length + medications.length + allergies.length} health factors
+            </Text>
+          </View>
+        )}
+
+        {/* Emergency Banner */}
+        {messages.some(m => m.emergencyDetected) && (
+          <View style={styles.emergencyBanner}>
+            <AlertTriangle size={16} color="#FFFFFF" strokeWidth={2} />
+            <Text style={styles.emergencyText}>
+              EMERGENCY DETECTED - CALL 911 IMMEDIATELY IF NEEDED
             </Text>
           </View>
         )}
@@ -419,16 +411,61 @@ export default function Assistant() {
                 </View>
                 <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
               </View>
+              
               <View style={[
                 styles.messageBubble,
-                message.isBot ? styles.botMessage : styles.userMessage
+                message.isBot ? styles.botMessage : styles.userMessage,
+                message.emergencyDetected && styles.emergencyMessage
               ]}>
                 <Text style={[
                   styles.messageText,
-                  message.isBot ? styles.botMessageText : styles.userMessageText
+                  message.isBot ? styles.botMessageText : styles.userMessageText,
+                  message.emergencyDetected && styles.emergencyMessageText
                 ]}>
                   {message.text}
                 </Text>
+
+                {/* Voice Playback Button */}
+                {message.voiceUrl && Config.features.enableVoice && (
+                  <TouchableOpacity
+                    style={styles.voiceButton}
+                    onPress={() => {
+                      if (playingAudio === message.id) {
+                        stopAudioPlayback();
+                      } else {
+                        playAudioResponse(message.voiceUrl!, message.id);
+                      }
+                    }}
+                  >
+                    {playingAudio === message.id ? (
+                      <VolumeX size={16} color="#0066CC" strokeWidth={2} />
+                    ) : (
+                      <Volume2 size={16} color="#0066CC" strokeWidth={2} />
+                    )}
+                    <Text style={styles.voiceButtonText}>
+                      {playingAudio === message.id ? 'Stop' : 'Play'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Sources */}
+                {message.sources && message.sources.length > 0 && (
+                  <View style={styles.sourcesContainer}>
+                    <Text style={styles.sourcesTitle}>Sources:</Text>
+                    {message.sources.slice(0, 3).map((source, index) => (
+                      <Text key={index} style={styles.sourceItem}>
+                        • {source.title}
+                      </Text>
+                    ))}
+                  </View>
+                )}
+
+                {/* Medical Disclaimer */}
+                {message.disclaimer && (
+                  <View style={styles.disclaimerContainer}>
+                    <Text style={styles.disclaimerText}>{message.disclaimer}</Text>
+                  </View>
+                )}
               </View>
             </View>
           ))}
@@ -446,7 +483,7 @@ export default function Assistant() {
                 <Text style={styles.timestamp}>analyzing your health context...</Text>
               </View>
               <View style={[styles.messageBubble, styles.botMessage]}>
-                <Text style={styles.typingText}>Your guardian is thinking...</Text>
+                <Text style={styles.typingText}>Your medical AI is thinking...</Text>
               </View>
             </View>
           )}
@@ -476,15 +513,31 @@ export default function Assistant() {
             style={styles.textInput}
             value={inputText}
             onChangeText={setInputText}
-            placeholder="Type your message..."
+            placeholder="Type your medical question..."
             placeholderTextColor="#94A3B8"
             multiline
             maxLength={500}
           />
+          
+          {/* Voice Input Button */}
+          {Config.features.enableVoice && (
+            <TouchableOpacity
+              style={[styles.voiceInputButton, isRecording && styles.voiceInputButtonRecording]}
+              onPress={isRecording ? stopRecording : startRecording}
+              disabled={isTyping}
+            >
+              {isRecording ? (
+                <MicOff size={20} color="#FFFFFF" strokeWidth={2} />
+              ) : (
+                <Mic size={20} color="#0066CC" strokeWidth={2} />
+              )}
+            </TouchableOpacity>
+          )}
+          
           <TouchableOpacity 
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
             onPress={sendMessage}
-            disabled={!inputText.trim()}
+            disabled={!inputText.trim() || isTyping}
           >
             <Send size={20} color={inputText.trim() ? "#FFFFFF" : "#94A3B8"} strokeWidth={2} />
           </TouchableOpacity>
@@ -547,6 +600,20 @@ const styles = StyleSheet.create({
     color: '#166534',
     marginLeft: 6,
   },
+  emergencyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  emergencyText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
   messagesContainer: {
     flex: 1,
     paddingHorizontal: 16,
@@ -607,6 +674,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#0066CC',
     borderBottomRightRadius: 4,
   },
+  emergencyMessage: {
+    borderColor: '#DC2626',
+    borderWidth: 2,
+  },
   messageText: {
     fontFamily: 'Inter-Regular',
     fontSize: 14,
@@ -618,10 +689,63 @@ const styles = StyleSheet.create({
   userMessageText: {
     color: '#FFFFFF',
   },
+  emergencyMessageText: {
+    color: '#DC2626',
+    fontWeight: '600',
+  },
   typingText: {
     fontFamily: 'Inter-Regular',
     fontSize: 14,
     color: '#64748B',
+    fontStyle: 'italic',
+  },
+  voiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  voiceButtonText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 12,
+    color: '#0066CC',
+    marginLeft: 4,
+  },
+  sourcesContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  sourcesTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 4,
+  },
+  sourceItem: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11,
+    color: '#94A3B8',
+    marginBottom: 2,
+  },
+  disclaimerContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#FEF3C7',
+    backgroundColor: '#FFFBEB',
+    borderRadius: 8,
+    padding: 8,
+  },
+  disclaimerText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11,
+    color: '#92400E',
     fontStyle: 'italic',
   },
   quickPromptsContainer: {
@@ -672,6 +796,18 @@ const styles = StyleSheet.create({
     color: '#1E293B',
     maxHeight: 100,
     marginRight: 8,
+  },
+  voiceInputButton: {
+    backgroundColor: '#F1F5F9',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  voiceInputButtonRecording: {
+    backgroundColor: '#DC2626',
   },
   sendButton: {
     backgroundColor: '#0066CC',
