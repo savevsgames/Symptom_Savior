@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, Dimensions, Image, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, TrendingUp, MessageCircle, Pill } from 'lucide-react-native';
+import { Plus, TrendingUp, MessageCircle, Pill, Stethoscope } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { BaseButton, BaseCard, SymptomCard, TreatmentCard } from '@/components/ui';
+import { BaseButton, BaseCard, SymptomCard, TreatmentCard, DoctorVisitCard } from '@/components/ui';
 import { useSymptoms } from '@/hooks/useSymptoms';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { theme } from '@/lib/theme';
@@ -14,9 +14,10 @@ export default function Dashboard() {
   const { symptoms, treatments, doctorVisits, loading } = useSymptoms();
   const { user } = useAuthContext();
   
-  // Get recent items (last 3)
-  const recentSymptoms = symptoms.slice(0, 3);
-  const recentTreatments = treatments.slice(0, 3);
+  // Get recent items (last 2-3)
+  const recentSymptoms = symptoms.slice(0, 2);
+  const recentTreatments = treatments.slice(0, 2);
+  const recentVisits = doctorVisits.slice(0, 2);
   
   // Calculate real stats
   const todaySymptoms = symptoms.filter(s => {
@@ -58,6 +59,7 @@ export default function Dashboard() {
   };
 
   const activeTreatments = treatments.filter(t => !t.completed);
+  const upcomingVisits = doctorVisits.filter(v => new Date(v.visit_ts) > new Date());
 
   return (
     <SafeAreaView style={styles.container}>
@@ -81,7 +83,7 @@ export default function Dashboard() {
         <View style={styles.quickActions}>
           <View style={styles.primaryActions}>
             <BaseButton
-              title="Log New Symptom"
+              title="Log Symptom"
               onPress={() => router.push('/add-symptom')}
               variant="primary"
               size="lg"
@@ -99,8 +101,8 @@ export default function Dashboard() {
           
           <View style={styles.secondaryActions}>
             <BaseButton
-              title="View History"
-              onPress={() => router.push('/(tabs)/symptoms')}
+              title="Doctor Visit"
+              onPress={() => router.push('/add-doctor-visit')}
               variant="outline"
               size="md"
               style={styles.secondaryAction}
@@ -143,15 +145,15 @@ export default function Dashboard() {
           <View style={styles.weeklyStats}>
             <View style={styles.weeklyStatItem}>
               <Text style={styles.weeklyStatNumber}>{thisWeekSymptoms.length}</Text>
-              <Text style={styles.weeklyStatLabel}>Symptoms Logged</Text>
+              <Text style={styles.weeklyStatLabel}>Symptoms</Text>
             </View>
             <View style={styles.weeklyStatItem}>
               <Text style={styles.weeklyStatNumber}>{activeTreatments.length}</Text>
               <Text style={styles.weeklyStatLabel}>Active Treatments</Text>
             </View>
             <View style={styles.weeklyStatItem}>
-              <Text style={styles.weeklyStatNumber}>{doctorVisits.length}</Text>
-              <Text style={styles.weeklyStatLabel}>Doctor Visits</Text>
+              <Text style={styles.weeklyStatNumber}>{upcomingVisits.length}</Text>
+              <Text style={styles.weeklyStatLabel}>Upcoming Visits</Text>
             </View>
           </View>
         </BaseCard>
@@ -185,7 +187,7 @@ export default function Dashboard() {
           ) : (
             <BaseCard variant="outlined" style={styles.emptyCard}>
               <Text style={styles.emptyText}>No symptoms logged yet</Text>
-              <Text style={styles.emptySubtext}>Tap "Log New Symptom" to get started</Text>
+              <Text style={styles.emptySubtext}>Tap "Log Symptom" to get started</Text>
             </BaseCard>
           )}
         </View>
@@ -224,6 +226,40 @@ export default function Dashboard() {
           )}
         </View>
 
+        {/* Recent Doctor Visits */}
+        <View style={styles.recentSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Visits</Text>
+            <BaseButton
+              title="View All"
+              onPress={() => router.push('/(tabs)/doctor-visits')}
+              variant="ghost"
+              size="sm"
+            />
+          </View>
+          
+          {loading ? (
+            <BaseCard variant="outlined" style={styles.loadingCard}>
+              <Text style={styles.loadingText}>Loading visits...</Text>
+            </BaseCard>
+          ) : recentVisits.length > 0 ? (
+            recentVisits.map((visit) => (
+              <DoctorVisitCard
+                key={visit.id}
+                {...visit}
+                onPress={() => {
+                  console.log('Navigate to visit detail:', visit.id);
+                }}
+              />
+            ))
+          ) : (
+            <BaseCard variant="outlined" style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No doctor visits logged yet</Text>
+              <Text style={styles.emptySubtext}>Tap "Doctor Visit" to get started</Text>
+            </BaseCard>
+          )}
+        </View>
+
         {/* Guardian Tip */}
         <BaseCard variant="filled" style={styles.tipCard}>
           <View style={styles.tipHeader}>
@@ -235,11 +271,11 @@ export default function Dashboard() {
             <Text style={styles.tipTitle}>Guardian's Daily Wisdom</Text>
           </View>
           <Text style={styles.tipText}>
-            {symptoms.length === 0 && treatments.length === 0
-              ? "Welcome to Symptom Savior! Start by logging your first symptom or treatment to begin tracking your health journey. I'm here to help you understand patterns and provide guidance."
-              : symptoms.length < 5 && treatments.length < 3
-              ? "Great start on your health tracking! The more consistently you log symptoms and treatments, the better I can help identify patterns and provide personalized insights."
-              : "Excellent tracking consistency! I can see patterns forming in your data. Consider asking me about your symptom trends, treatment effectiveness, or any health concerns you might have."
+            {symptoms.length === 0 && treatments.length === 0 && doctorVisits.length === 0
+              ? "Welcome to Symptom Savior! Start by logging your first symptom, treatment, or doctor visit to begin tracking your health journey. I'm here to help you understand patterns and provide guidance."
+              : symptoms.length < 5 && treatments.length < 3 && doctorVisits.length < 2
+              ? "Great start on your health tracking! The more consistently you log symptoms, treatments, and visits, the better I can help identify patterns and provide personalized insights."
+              : "Excellent tracking consistency! I can see patterns forming in your data. Consider asking me about your symptom trends, treatment effectiveness, or preparing for your next doctor visit."
             }
           </Text>
           <BaseButton
