@@ -254,6 +254,124 @@ CREATE TABLE embedding_jobs (
 );
 ```
 
+
+```sql
+-- ENUMs used
+CREATE TYPE IF NOT EXISTS gender_type AS ENUM
+ ('female','male','non_binary','prefer_not_to_say','other');
+
+CREATE TYPE IF NOT EXISTS blood_type AS ENUM
+ ('A+','A‑','B+','B‑','AB+','AB‑','O+','O‑','unknown');
+
+CREATE TABLE user_medical_profiles (
+  id               uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name        text,
+  date_of_birth    date,
+  gender           gender_type,
+  blood_group      blood_type,
+  height_cm        numeric,
+  weight_kg        numeric,
+  emergency_contact jsonb DEFAULT '{}'::jsonb,
+  medications      jsonb DEFAULT '[]'::jsonb,
+  chronic_conditions jsonb DEFAULT '[]'::jsonb,
+  allergies        jsonb DEFAULT '[]'::jsonb,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now()
+);
+```
+
+**RLS**
+
+```sql
+ALTER TABLE user_medical_profiles ENABLE ROW LEVEL SECURITY;
+CREATE POLICY profiles_owner ON user_medical_profiles
+ USING  (auth.uid() = user_id)
+ WITH CHECK (auth.uid() = user_id);
+```
+
+> *TxAgent tips*:  one profile row **per user**. Use the JSONB columns when you need a quick list of allergies or conditions, but prefer the dedicated relationship tables (below) for detailed, queryable records.
+
+## Profile Satellite Tables 🧬
+
+To keep `user_medical_profiles` slim yet fully relational, three satellite tables extend it:
+
+| Table | Core Columns | Purpose |
+|-------|--------------|---------|
+| `profile_conditions` | `condition_name text NOT NULL, diagnosed_on date, resolved_on date` | Ongoing / past conditions |
+| `profile_medications` | `medication_name text NOT NULL, dose text, started_on date, stopped_on date` | Long‑term meds |
+| `profile_allergies` | `allergen text NOT NULL, reaction text, severity int CHECK (severity BETWEEN 1 AND 10)` | Allergy records |
+
+All three add:
+
+```sql
+id uuid primary key default uuid_generate_v4(),
+user_id uuid not null references auth.users(id) on delete cascade,
+profile_id uuid not null references user_medical_profiles(id) on delete cascade,
+created_at timestamptz default now(),
+updated_at timestamptz default now()
+```
+
+## Bridge Tables  
+
+`symptom_treatments`, `visit_symptoms`, `visit_treatments`
+
+
+
+
+---
+
+## Sample Queries 🔍
+
+### Latest Personal Health Record
+
+```sql
+SELECT *
+FROM user_medical_profiles
+WHERE user_id = auth.uid();
+```
+
+### Active chronic conditions + meds
+
+```sql
+SELECT c.condition_name,
+       m.medication_name,
+       m.dose
+FROM profile_conditions   c
+LEFT JOIN profile_medications m 
+       ON m.profile_id = c.profile_id
+      AND m.stopped_on IS NULL
+WHERE c.user_id = auth.uid()
+  AND c.resolved_on IS NULL;
+```
+
+### RAG context query (symptom ⇆ profile)
+
+```sql
+SELECT s.symptom_name,
+       s.severity,
+       c.condition_name,
+       array_agg(a.allergen) AS allergies
+FROM user_symptoms s
+LEFT JOIN profile_conditions c ON c.user_id = s.user_id
+LEFT JOIN profile_allergies  a ON a.user_id = s.user_id
+WHERE s.user_id = auth.uid()
+  AND s.created_at >= now() - interval '30 days'
+GROUP BY s.id, c.condition_name
+ORDER BY s.created_at DESC;
+```
+
+---
+
+## Data‑Privacy Checklist ✅
+
+1. RLS everywhere → **no** cross‑user leakage.  
+2. Service‑role override reserved for backend batch jobs.  
+3. All PHI columns encrypted‑at‑rest (Supabase default).  
+4. Minimal projection in TxAgent queries.
+
+
+
 ## Performance Indexes
 
 ```sql
