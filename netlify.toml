@@ -1,6 +1,6 @@
 [build]
   command = "expo export -p web"
-  publish = "dist/client" 
+  publish = "dist/web"
 
 [[redirects]]
   from = "/*"
