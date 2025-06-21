@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Edit3, Trash2, MapPin, Clock, Calendar, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, CreditCard as Edit3, Trash2, MapPin, Clock, Calendar, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { BaseButton, BaseCard } from '@/components/ui';
 import { useSymptoms, type Symptom } from '@/hooks/useSymptoms';
 import { theme } from '@/lib/theme';
