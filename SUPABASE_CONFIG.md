@@ -126,9 +126,160 @@ CREATE POLICY "visits_owner" ON doctor_visits
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 ```
 
+### 4. `user_medical_profiles` - Personal Health Information
+
+**Purpose**: Store comprehensive personal health information and demographics for each user.
+
+```sql
+CREATE TABLE user_medical_profiles (
+  id               uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name        text,
+  date_of_birth    date,
+  gender           gender_type,
+  blood_group      blood_type,
+  height_cm        numeric,
+  weight_kg        numeric,
+  emergency_contact jsonb DEFAULT '{}'::jsonb,
+  medications      jsonb DEFAULT '[]'::jsonb,
+  chronic_conditions jsonb DEFAULT '[]'::jsonb,
+  allergies        jsonb DEFAULT '[]'::jsonb,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now()
+);
+```
+
+**Supporting Enums**:
+```sql
+CREATE TYPE gender_type AS ENUM (
+  'female',
+  'male', 
+  'non_binary',
+  'prefer_not_to_say',
+  'other'
+);
+
+CREATE TYPE blood_type AS ENUM (
+  'A+', 'A‑', 'B+', 'B‑', 
+  'AB+', 'AB‑', 'O+', 'O‑', 
+  'unknown'
+);
+```
+
+**Key Fields for TxAgent Context**:
+- `full_name`: Patient's full name
+- `date_of_birth`: For age-specific medical guidance
+- `gender`: For gender-specific health considerations
+- `blood_group`: Important for emergency situations
+- `height_cm`/`weight_kg`: For BMI and dosage calculations
+- `emergency_contact`: JSONB containing emergency contact information
+- `medications`: JSONB array of current medications (quick reference)
+- `chronic_conditions`: JSONB array of ongoing health conditions
+- `allergies`: JSONB array of known allergies
+
+**RLS Policy**: Users can only access their own profile
+```sql
+CREATE POLICY "profiles_owner" ON user_medical_profiles
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+```
+
+## Profile Satellite Tables
+
+To maintain relational integrity while keeping the main profile table manageable, three satellite tables provide detailed tracking:
+
+### 5. `profile_conditions` - Detailed Condition Tracking
+
+**Purpose**: Track detailed information about chronic conditions and medical history.
+
+```sql
+CREATE TABLE profile_conditions (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  profile_id uuid NOT NULL REFERENCES user_medical_profiles(id) ON DELETE CASCADE,
+  condition_name text NOT NULL,
+  diagnosed_on date,
+  resolved_on date,
+  severity int CHECK (severity BETWEEN 1 AND 10),
+  notes text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+```
+
+**Key Features**:
+- Links to both user and profile for data integrity
+- Tracks condition lifecycle (diagnosis to resolution)
+- Severity scoring for condition impact assessment
+- Detailed notes for additional context
+
+### 6. `profile_medications` - Detailed Medication Tracking
+
+**Purpose**: Track detailed medication history and current prescriptions.
+
+```sql
+CREATE TABLE profile_medications (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  profile_id uuid NOT NULL REFERENCES user_medical_profiles(id) ON DELETE CASCADE,
+  medication_name text NOT NULL,
+  dose text,
+  frequency text,
+  started_on date,
+  stopped_on date,
+  prescribing_doctor text,
+  notes text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+```
+
+**Key Features**:
+- Complete medication lifecycle tracking
+- Dosage and frequency information
+- Prescribing physician tracking
+- Start/stop dates for medication history
+
+### 7. `profile_allergies` - Detailed Allergy Tracking
+
+**Purpose**: Track detailed allergy information with severity and reaction details.
+
+```sql
+CREATE TABLE profile_allergies (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  profile_id uuid NOT NULL REFERENCES user_medical_profiles(id) ON DELETE CASCADE,
+  allergen text NOT NULL,
+  reaction text,
+  severity int CHECK (severity BETWEEN 1 AND 10),
+  discovered_on date,
+  notes text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+```
+
+**Key Features**:
+- Specific allergen identification
+- Reaction type and severity tracking
+- Discovery date for allergy timeline
+- Detailed notes for emergency situations
+
+**RLS Policies for Satellite Tables**:
+```sql
+-- All satellite tables use the same owner-only policy
+CREATE POLICY "profile_conditions_owner" ON profile_conditions
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "profile_medications_owner" ON profile_medications
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "profile_allergies_owner" ON profile_allergies
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+```
+
 ## Relationship Tables (Bridge Tables)
 
-### 4. `symptom_treatments` - Symptom-Treatment Relationships
+### 8. `symptom_treatments` - Symptom-Treatment Relationships
 
 **Purpose**: Links symptoms to their corresponding treatments.
 
@@ -150,7 +301,7 @@ CREATE POLICY "link_sympt_treat" ON symptom_treatments
   );
 ```
 
-### 5. `visit_symptoms` - Visit-Symptom Relationships
+### 9. `visit_symptoms` - Visit-Symptom Relationships
 
 **Purpose**: Links doctor visits to symptoms discussed during the visit.
 
@@ -172,7 +323,7 @@ CREATE POLICY "link_visit_sympt" ON visit_symptoms
   );
 ```
 
-### 6. `visit_treatments` - Visit-Treatment Relationships
+### 10. `visit_treatments` - Visit-Treatment Relationships
 
 **Purpose**: Links doctor visits to treatments prescribed or discussed.
 
@@ -196,12 +347,11 @@ CREATE POLICY "link_visit_treat" ON visit_treatments
 
 ## Existing Tables (From Original Schema)
 
-### 7. `documents` - Medical Document Storage
+### 11. `documents` - Medical Document Storage
 
 **Purpose**: Store medical documents with vector embeddings for RAG system.
 
 ```sql
--- Existing table structure
 CREATE TABLE documents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   filename text,
@@ -218,12 +368,11 @@ CREATE TABLE documents (
 - JSONB metadata for flexible document properties
 - User-specific document storage
 
-### 8. `agents` - AI Session Management
+### 12. `agents` - AI Session Management
 
 **Purpose**: Track AI agent sessions and conversation context.
 
 ```sql
--- Existing table structure  
 CREATE TABLE agents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -235,12 +384,11 @@ CREATE TABLE agents (
 );
 ```
 
-### 9. `embedding_jobs` - Document Processing Queue
+### 13. `embedding_jobs` - Document Processing Queue
 
 **Purpose**: Track document embedding processing jobs.
 
 ```sql
--- Existing table structure
 CREATE TABLE embedding_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   file_path text NOT NULL,
@@ -254,136 +402,108 @@ CREATE TABLE embedding_jobs (
 );
 ```
 
-
-```sql
--- ENUMs used
-CREATE TYPE IF NOT EXISTS gender_type AS ENUM
- ('female','male','non_binary','prefer_not_to_say','other');
-
-CREATE TYPE IF NOT EXISTS blood_type AS ENUM
- ('A+','A‑','B+','B‑','AB+','AB‑','O+','O‑','unknown');
-
-CREATE TABLE user_medical_profiles (
-  id               uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  full_name        text,
-  date_of_birth    date,
-  gender           gender_type,
-  blood_group      blood_type,
-  height_cm        numeric,
-  weight_kg        numeric,
-  emergency_contact jsonb DEFAULT '{}'::jsonb,
-  medications      jsonb DEFAULT '[]'::jsonb,
-  chronic_conditions jsonb DEFAULT '[]'::jsonb,
-  allergies        jsonb DEFAULT '[]'::jsonb,
-  created_at       timestamptz NOT NULL DEFAULT now(),
-  updated_at       timestamptz NOT NULL DEFAULT now()
-);
-```
-
-**RLS**
-
-```sql
-ALTER TABLE user_medical_profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY profiles_owner ON user_medical_profiles
- USING  (auth.uid() = user_id)
- WITH CHECK (auth.uid() = user_id);
-```
-
-> *TxAgent tips*:  one profile row **per user**. Use the JSONB columns when you need a quick list of allergies or conditions, but prefer the dedicated relationship tables (below) for detailed, queryable records.
-
-## Profile Satellite Tables 🧬
-
-To keep `user_medical_profiles` slim yet fully relational, three satellite tables extend it:
-
-| Table | Core Columns | Purpose |
-|-------|--------------|---------|
-| `profile_conditions` | `condition_name text NOT NULL, diagnosed_on date, resolved_on date` | Ongoing / past conditions |
-| `profile_medications` | `medication_name text NOT NULL, dose text, started_on date, stopped_on date` | Long‑term meds |
-| `profile_allergies` | `allergen text NOT NULL, reaction text, severity int CHECK (severity BETWEEN 1 AND 10)` | Allergy records |
-
-All three add:
-
-```sql
-id uuid primary key default uuid_generate_v4(),
-user_id uuid not null references auth.users(id) on delete cascade,
-profile_id uuid not null references user_medical_profiles(id) on delete cascade,
-created_at timestamptz default now(),
-updated_at timestamptz default now()
-```
-
-## Bridge Tables  
-
-`symptom_treatments`, `visit_symptoms`, `visit_treatments`
-
-
-
-
----
-
-## Sample Queries 🔍
-
-### Latest Personal Health Record
-
-```sql
-SELECT *
-FROM user_medical_profiles
-WHERE user_id = auth.uid();
-```
-
-### Active chronic conditions + meds
-
-```sql
-SELECT c.condition_name,
-       m.medication_name,
-       m.dose
-FROM profile_conditions   c
-LEFT JOIN profile_medications m 
-       ON m.profile_id = c.profile_id
-      AND m.stopped_on IS NULL
-WHERE c.user_id = auth.uid()
-  AND c.resolved_on IS NULL;
-```
-
-### RAG context query (symptom ⇆ profile)
-
-```sql
-SELECT s.symptom_name,
-       s.severity,
-       c.condition_name,
-       array_agg(a.allergen) AS allergies
-FROM user_symptoms s
-LEFT JOIN profile_conditions c ON c.user_id = s.user_id
-LEFT JOIN profile_allergies  a ON a.user_id = s.user_id
-WHERE s.user_id = auth.uid()
-  AND s.created_at >= now() - interval '30 days'
-GROUP BY s.id, c.condition_name
-ORDER BY s.created_at DESC;
-```
-
----
-
-## Data‑Privacy Checklist ✅
-
-1. RLS everywhere → **no** cross‑user leakage.  
-2. Service‑role override reserved for backend batch jobs.  
-3. All PHI columns encrypted‑at‑rest (Supabase default).  
-4. Minimal projection in TxAgent queries.
-
-
-
 ## Performance Indexes
 
 ```sql
--- Symptom tracking indexes
+-- Core symptom tracking indexes
 CREATE INDEX ON user_symptoms (user_id, created_at);
 CREATE INDEX ON treatments (user_id, created_at);
 CREATE INDEX ON doctor_visits (user_id, visit_ts);
+
+-- Profile and satellite table indexes
+CREATE INDEX ON user_medical_profiles (user_id);
+CREATE INDEX ON profile_conditions (user_id, profile_id);
+CREATE INDEX ON profile_medications (user_id, profile_id);
+CREATE INDEX ON profile_allergies (user_id, profile_id);
 
 -- Existing document indexes
 CREATE INDEX documents_user_id_idx ON documents (user_id);
 CREATE INDEX documents_embedding_idx ON documents USING ivfflat (embedding vector_cosine_ops);
 CREATE INDEX documents_created_at_idx ON documents (created_at);
+```
+
+## Sample Queries for TxAgent Context
+
+### Get Complete User Health Profile
+
+```sql
+-- Get user's basic profile information
+SELECT 
+  p.*,
+  EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
+FROM user_medical_profiles p
+WHERE p.user_id = auth.uid();
+```
+
+### Get Active Health Conditions and Medications
+
+```sql
+-- Get current active conditions and medications
+SELECT 
+  'condition' as type,
+  pc.condition_name as name,
+  pc.severity,
+  pc.diagnosed_on as start_date,
+  pc.notes
+FROM profile_conditions pc
+WHERE pc.user_id = auth.uid() 
+  AND pc.resolved_on IS NULL
+
+UNION ALL
+
+SELECT 
+  'medication' as type,
+  pm.medication_name as name,
+  NULL as severity,
+  pm.started_on as start_date,
+  CONCAT(pm.dose, ' - ', pm.frequency) as notes
+FROM profile_medications pm
+WHERE pm.user_id = auth.uid() 
+  AND pm.stopped_on IS NULL
+
+ORDER BY start_date DESC;
+```
+
+### Get Recent Health Context for AI Consultation
+
+```sql
+-- Comprehensive recent health context
+SELECT 
+  s.symptom_name,
+  s.severity,
+  s.triggers,
+  s.location,
+  s.created_at,
+  array_agg(DISTINCT pc.condition_name) FILTER (WHERE pc.condition_name IS NOT NULL) as conditions,
+  array_agg(DISTINCT pm.medication_name) FILTER (WHERE pm.medication_name IS NOT NULL) as medications,
+  array_agg(DISTINCT pa.allergen) FILTER (WHERE pa.allergen IS NOT NULL) as allergies
+FROM user_symptoms s
+LEFT JOIN profile_conditions pc ON pc.user_id = s.user_id AND pc.resolved_on IS NULL
+LEFT JOIN profile_medications pm ON pm.user_id = s.user_id AND pm.stopped_on IS NULL  
+LEFT JOIN profile_allergies pa ON pa.user_id = s.user_id
+WHERE s.user_id = auth.uid()
+  AND s.created_at >= now() - interval '30 days'
+GROUP BY s.id, s.symptom_name, s.severity, s.triggers, s.location, s.created_at
+ORDER BY s.created_at DESC;
+```
+
+### Get Symptom-Treatment Effectiveness Analysis
+
+```sql
+-- Analyze treatment effectiveness for symptoms
+SELECT 
+  s.symptom_name,
+  t.name as treatment_name,
+  t.treatment_type,
+  COUNT(*) as usage_count,
+  AVG(s.severity) as avg_severity_when_used
+FROM user_symptoms s
+JOIN symptom_treatments st ON s.id = st.symptom_id
+JOIN treatments t ON st.treatment_id = t.id
+WHERE s.user_id = auth.uid()
+  AND s.created_at >= now() - interval '90 days'
+GROUP BY s.symptom_name, t.name, t.treatment_type
+ORDER BY usage_count DESC, avg_severity_when_used ASC;
 ```
 
 ## Row Level Security (RLS) Summary
@@ -404,40 +524,23 @@ When the TxAgent Container processes medical consultations, it should:
 1. **Use JWT Authentication**: Include the user's JWT token to respect RLS policies
 2. **Query Recent Context**: Focus on recent symptoms, treatments, and visits for relevant context
 3. **Respect Data Relationships**: Use bridge tables to understand symptom-treatment connections
-4. **Consider Temporal Patterns**: Use timestamps to identify trends and patterns
+4. **Consider Personal Health Profile**: Include age, gender, conditions, medications, and allergies in context
+5. **Consider Temporal Patterns**: Use timestamps to identify trends and patterns
 
-### Recommended Query Patterns
+### Recommended Context Building
 
-**Get User's Recent Health Context**:
-```sql
--- Recent symptoms (last 30 days)
-SELECT * FROM user_symptoms 
-WHERE user_id = auth.uid() 
-AND created_at >= now() - interval '30 days'
-ORDER BY created_at DESC;
+**Priority 1 - Essential Context**:
+- User's age and gender from `user_medical_profiles`
+- Active chronic conditions from `profile_conditions`
+- Current medications from `profile_medications`
+- Known allergies from `profile_allergies`
+- Recent symptoms (last 30 days) from `user_symptoms`
 
--- Active treatments
-SELECT * FROM treatments 
-WHERE user_id = auth.uid() 
-AND completed = false
-ORDER BY created_at DESC;
-
--- Recent doctor visits
-SELECT * FROM doctor_visits 
-WHERE user_id = auth.uid() 
-AND visit_ts >= now() - interval '90 days'
-ORDER BY visit_ts DESC;
-```
-
-**Get Symptom-Treatment Relationships**:
-```sql
-SELECT s.symptom_name, s.severity, t.name as treatment_name, t.treatment_type
-FROM user_symptoms s
-JOIN symptom_treatments st ON s.id = st.symptom_id
-JOIN treatments t ON st.treatment_id = t.id
-WHERE s.user_id = auth.uid()
-ORDER BY s.created_at DESC;
-```
+**Priority 2 - Enhanced Context**:
+- Recent doctor visits and summaries
+- Treatment history and effectiveness
+- Symptom patterns and triggers
+- Emergency contact information (for urgent situations)
 
 ### Data Privacy Considerations
 
@@ -445,6 +548,7 @@ ORDER BY s.created_at DESC;
 2. **Audit Trail**: All access is logged through Supabase's built-in audit system
 3. **Minimal Data Exposure**: Only query necessary fields for context
 4. **Secure Processing**: Process data within the secure container environment
+5. **Emergency Override**: Service role can access data for emergency situations
 
 ## Schema Evolution
 
@@ -454,5 +558,6 @@ The schema supports future enhancements:
 - **Relationship Flexibility**: Bridge tables support many-to-many relationships
 - **Temporal Analysis**: Timestamp fields enable trend analysis
 - **Treatment Tracking**: Comprehensive treatment lifecycle management
+- **Profile Extensibility**: Satellite tables allow detailed health record expansion
 
 This schema provides a robust foundation for AI-powered health insights while maintaining strict data privacy and security standards.
