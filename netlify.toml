@@ -1,5 +1,5 @@
 [build]
-  command = "expo export -p web"
+  command = "expo export -p web --output-dir dist/web"
   publish = "dist/web"
 
 [[redirects]]
