@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Calendar, Clock, User, CheckCircle, Pill, Activity, Dumbbell, Brain, Plus } from 'lucide-react-native';
+import { Calendar, Clock, User, CircleCheck as CheckCircle, Pill, Activity, Dumbbell, Brain, Plus } from 'lucide-react-native';
 import { BaseCard } from './BaseCard';
 import { theme } from '@/lib/theme';
 

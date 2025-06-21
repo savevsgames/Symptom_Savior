@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Plus, Filter, CheckCircle, Clock } from 'lucide-react-native';
+import { Search, Plus, Filter, CircleCheck as CheckCircle, Clock } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { BaseTextInput, BaseButton, BaseCard, TreatmentCard } from '@/components/ui';
 import { useSymptoms } from '@/hooks/useSymptoms';
