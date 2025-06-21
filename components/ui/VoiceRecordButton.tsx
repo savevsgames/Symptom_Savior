@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { TouchableOpacity, Text, StyleSheet, View, Animated } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, View, Animated, Platform } from 'react-native';
 import { Mic, MicOff, Square } from 'lucide-react-native';
-import { speechService, type TranscriptionResult } from '@/lib/speech';
 import { theme } from '@/lib/theme';
 import { logger } from '@/utils/logger';
+
+export interface TranscriptionResult {
+  text: string;
+  confidence?: number;
+  duration?: number;
+}
 
 export interface VoiceRecordButtonProps {
   onTranscription?: (result: TranscriptionResult) => void;
@@ -30,13 +35,30 @@ export function VoiceRecordButton({
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [speechService, setSpeechService] = useState<any>(null);
   
   // Animation for recording pulse effect
   const pulseAnim = new Animated.Value(1);
 
   useEffect(() => {
-    checkPermissions();
+    // Only initialize speech service on client-side
+    if (typeof window !== 'undefined') {
+      initializeSpeechService();
+    }
   }, []);
+
+  const initializeSpeechService = async () => {
+    try {
+      const { speechService: service } = await import('@/lib/speech');
+      setSpeechService(service);
+      if (service) {
+        checkPermissions(service);
+      }
+    } catch (error) {
+      logger.error('Failed to initialize speech service', error);
+      onError?.('Voice input not available on this platform');
+    }
+  };
 
   useEffect(() => {
     if (isRecording) {
@@ -72,9 +94,9 @@ export function VoiceRecordButton({
     }
   }, [isRecording]);
 
-  const checkPermissions = async () => {
+  const checkPermissions = async (service: any) => {
     try {
-      const granted = await speechService.requestPermissions();
+      const granted = await service.requestPermissions();
       setHasPermission(granted);
     } catch (error) {
       logger.error('Permission check failed', error);
@@ -83,7 +105,7 @@ export function VoiceRecordButton({
   };
 
   const handlePress = async () => {
-    if (disabled || isProcessing) return;
+    if (disabled || isProcessing || !speechService) return;
 
     if (!hasPermission) {
       onError?.('Microphone permission is required for voice input');
@@ -98,6 +120,11 @@ export function VoiceRecordButton({
   };
 
   const startRecording = async () => {
+    if (!speechService) {
+      onError?.('Speech service not available');
+      return;
+    }
+
     try {
       setIsRecording(true);
       onRecordingStart?.();
@@ -116,6 +143,8 @@ export function VoiceRecordButton({
   };
 
   const stopRecording = async () => {
+    if (!speechService) return;
+
     try {
       setIsRecording(false);
       setIsProcessing(true);
@@ -176,17 +205,34 @@ export function VoiceRecordButton({
   };
 
   const getButtonStyle = () => {
-    if (disabled) return [styles.button, styles.disabled, { width: buttonSize, height: buttonSize }];
+    if (disabled || !speechService) return [styles.button, styles.disabled, { width: buttonSize, height: buttonSize }];
     if (isProcessing) return [styles.button, styles.processing, { width: buttonSize, height: buttonSize }];
     if (isRecording) return [styles.button, styles.recording, { width: buttonSize, height: buttonSize }];
     return [styles.button, styles.idle, { width: buttonSize, height: buttonSize }];
   };
 
+  // Don't render on server-side
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  // Show disabled state if speech service is not available
+  if (!speechService) {
+    return (
+      <TouchableOpacity 
+        style={[styles.button, styles.disabled, { width: buttonSize, height: buttonSize }]}
+        disabled
+      >
+        <Mic size={iconSize} color={theme.colors.text.tertiary} strokeWidth={2} />
+      </TouchableOpacity>
+    );
+  }
+
   if (hasPermission === false) {
     return (
       <TouchableOpacity 
         style={[styles.button, styles.disabled, { width: buttonSize, height: buttonSize }]}
-        onPress={checkPermissions}
+        onPress={() => speechService && checkPermissions(speechService)}
       >
         <Mic size={iconSize} color={theme.colors.text.tertiary} strokeWidth={2} />
       </TouchableOpacity>
@@ -199,7 +245,7 @@ export function VoiceRecordButton({
         <TouchableOpacity
           style={getButtonStyle()}
           onPress={handlePress}
-          disabled={disabled || isProcessing}
+          disabled={disabled || isProcessing || !speechService}
           activeOpacity={0.8}
         >
           {getIcon()}

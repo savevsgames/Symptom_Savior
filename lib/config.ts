@@ -48,10 +48,15 @@ const parseBoolean = (value: string | undefined): boolean => {
 };
 
 /**
- * Validate required environment variable
+ * Validate required environment variable with fallback for SSR
  */
 const requireEnv = (key: string, value: string | undefined): string => {
   if (!value) {
+    // During SSR/build, provide fallback values to prevent build failures
+    if (typeof window === 'undefined') {
+      console.warn(`Missing environment variable: ${key} - using fallback for SSR`);
+      return key === 'EXPO_PUBLIC_SUPABASE_URL' ? 'https://placeholder.supabase.co' : 'placeholder-key';
+    }
     throw new Error(`Missing required environment variable: ${key}`);
   }
   return value;
@@ -96,7 +101,7 @@ export const Config: AppConfig = {
 /**
  * Development helper to log configuration (only in debug mode)
  */
-if (Config.features.debug && __DEV__) {
+if (Config.features.debug && typeof window !== 'undefined' && __DEV__) {
   console.log('🔧 App Configuration Loaded:', {
     supabase: {
       url: Config.supabase.url ? '✅ Set' : '❌ Missing',
