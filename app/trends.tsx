@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, TrendingUp, Calendar, BarChart3, PieChart, Activity, Target } from 'lucide-react-native';
+import { ArrowLeft, TrendingUp, Calendar, ChartBar as BarChart3, ChartPie as PieChart, Activity, Target } from 'lucide-react-native';
 import { BaseCard, BaseButton } from '@/components/ui';
 import { useSymptoms } from '@/hooks/useSymptoms';
 import { theme } from '@/lib/theme';
