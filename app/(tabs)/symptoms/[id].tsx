@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, CreditCard as Edit3, Trash2, MapPin, Clock, Calendar, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, Edit3, Trash2, MapPin, Clock, Calendar, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { BaseButton, BaseCard } from '@/components/ui';
 import { useSymptoms, type Symptom } from '@/hooks/useSymptoms';
 import { theme } from '@/lib/theme';
@@ -19,6 +19,17 @@ export default function SymptomDetail() {
       loadSymptom();
     }
   }, [id]);
+
+  // Reload symptom when screen comes into focus (after editing)
+  useEffect(() => {
+    const unsubscribe = router.addListener('focus', () => {
+      if (id && !loading) {
+        loadSymptom();
+      }
+    });
+
+    return unsubscribe;
+  }, [id, loading]);
 
   const loadSymptom = async () => {
     try {
@@ -38,6 +49,14 @@ export default function SymptomDetail() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEdit = () => {
+    if (!symptom) return;
+    router.push({
+      pathname: '/edit-symptom',
+      params: { id: symptom.id }
+    });
   };
 
   const handleDelete = () => {
@@ -148,10 +167,7 @@ export default function SymptomDetail() {
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={styles.headerAction}
-            onPress={() => {
-              // TODO: Navigate to edit screen in future update
-              Alert.alert('Coming Soon', 'Edit functionality will be available in a future update.');
-            }}
+            onPress={handleEdit}
           >
             <Edit3 size={20} color={theme.colors.text.secondary} strokeWidth={2} />
           </TouchableOpacity>
@@ -256,9 +272,18 @@ export default function SymptomDetail() {
         {/* Actions */}
         <View style={styles.actionsContainer}>
           <BaseButton
+            title="Edit Symptom"
+            onPress={handleEdit}
+            variant="primary"
+            size="lg"
+            fullWidth
+            style={styles.actionButton}
+          />
+          
+          <BaseButton
             title="Log Similar Symptom"
             onPress={() => router.push('/add-symptom')}
-            variant="primary"
+            variant="outline"
             size="lg"
             fullWidth
             style={styles.actionButton}
