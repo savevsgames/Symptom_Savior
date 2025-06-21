@@ -1,4 +1,3 @@
-// metro.config.js
 const { getDefaultConfig } = require('expo/metro-config');
 
 /** @type {import('expo/metro-config').MetroConfig} */
@@ -10,6 +9,7 @@ config.resolver.extraNodeModules = {
   crypto: require.resolve('crypto-browserify'),
   buffer: require.resolve('buffer'),
   util: require.resolve('util'),
+  process: require.resolve('process/browser'),
 };
 
 // Enable require.context for Expo Router (critical for route discovery)
@@ -22,5 +22,13 @@ config.resolver.unstable_enablePackageExports = true;
 // Ensure proper file extensions are recognized
 config.resolver.sourceExts.push('tsx', 'ts', 'jsx', 'js', 'json');
 config.resolver.assetExts.push('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg');
+
+// Web-specific optimizations
+if (process.env.EXPO_PLATFORM === 'web') {
+  config.resolver.alias = {
+    ...config.resolver.alias,
+    'react-native$': 'react-native-web',
+  };
+}
 
 module.exports = config;

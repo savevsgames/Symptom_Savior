@@ -1,64 +1,59 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, Plus, TrendingUp } from 'lucide-react-native';
+import { Search, Plus, Calendar, CircleAlert as AlertCircle, Clock } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { BaseTextInput, BaseButton, BaseCard, SymptomCard } from '@/components/ui';
+import { BaseTextInput, BaseButton, BaseCard, DoctorVisitCard } from '@/components/ui';
 import { useSymptoms } from '@/hooks/useSymptoms';
 import { theme } from '@/lib/theme';
 
-export default function Symptoms() {
+export default function DoctorVisits() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
-  const { symptoms, loading, refetch } = useSymptoms();
+  const { doctorVisits, loading, refetch } = useSymptoms();
 
   const filterOptions = [
     { key: 'all', label: 'All' },
-    { key: 'minimal', label: 'Minimal (1-2)' },
-    { key: 'mild', label: 'Mild (3-4)' },
-    { key: 'moderate', label: 'Moderate (5-6)' },
-    { key: 'severe', label: 'Severe (7-8)' },
-    { key: 'very-severe', label: 'Very Severe (9-10)' },
+    { key: 'upcoming', label: 'Upcoming' },
+    { key: 'past', label: 'Past' },
+    { key: 'follow-up', label: 'Follow-up Required' },
   ];
 
-  const filteredSymptoms = symptoms.filter(symptom => {
-    const matchesSearch = symptom.symptom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (symptom.description && symptom.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                         (symptom.triggers && symptom.triggers.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredVisits = doctorVisits.filter(visit => {
+    const matchesSearch = (visit.doctor_name && visit.doctor_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                         (visit.location && visit.location.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                         (visit.visit_summary && visit.visit_summary.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    const visitDate = new Date(visit.visit_ts);
+    const now = new Date();
     
     if (selectedFilter === 'all') return matchesSearch;
-    if (selectedFilter === 'minimal') return matchesSearch && symptom.severity <= 2;
-    if (selectedFilter === 'mild') return matchesSearch && symptom.severity >= 3 && symptom.severity <= 4;
-    if (selectedFilter === 'moderate') return matchesSearch && symptom.severity >= 5 && symptom.severity <= 6;
-    if (selectedFilter === 'severe') return matchesSearch && symptom.severity >= 7 && symptom.severity <= 8;
-    if (selectedFilter === 'very-severe') return matchesSearch && symptom.severity >= 9;
+    if (selectedFilter === 'upcoming') return matchesSearch && visitDate > now;
+    if (selectedFilter === 'past') return matchesSearch && visitDate < now;
+    if (selectedFilter === 'follow-up') return matchesSearch && visit.follow_up_required;
     
     return matchesSearch;
   });
 
-  const getStatsForPeriod = (days: number) => {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
+  const getVisitStats = () => {
+    const now = new Date();
+    const upcoming = doctorVisits.filter(v => new Date(v.visit_ts) > now);
+    const past = doctorVisits.filter(v => new Date(v.visit_ts) < now);
+    const followUp = doctorVisits.filter(v => v.follow_up_required);
     
-    return symptoms.filter(symptom => {
-      const symptomDate = new Date(symptom.created_at);
-      return symptomDate >= cutoffDate;
-    });
+    return { upcoming: upcoming.length, past: past.length, followUp: followUp.length };
   };
 
-  const thisWeekSymptoms = getStatsForPeriod(7);
-  const avgSeverity = symptoms.length > 0 
-    ? (symptoms.reduce((sum, s) => sum + s.severity, 0) / symptoms.length).toFixed(1)
-    : '0';
+  const stats = getVisitStats();
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Symptom History</Text>
+        <Text style={styles.title}>Doctor Visits</Text>
         <TouchableOpacity 
           style={styles.addButton}
-          onPress={() => router.push('/add-symptom')}
+          onPress={() => router.push('/add-doctor-visit')}
         >
           <Plus size={20} color={theme.colors.primary[500]} strokeWidth={2} />
         </TouchableOpacity>
@@ -67,7 +62,7 @@ export default function Symptoms() {
       {/* Search */}
       <View style={styles.searchSection}>
         <BaseTextInput
-          placeholder="Search symptoms, descriptions, or triggers..."
+          placeholder="Search doctors, locations, or visit notes..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           leftIcon={<Search size={20} color={theme.colors.text.tertiary} strokeWidth={2} />}
@@ -96,65 +91,62 @@ export default function Symptoms() {
       <BaseCard variant="elevated" style={styles.statsCard}>
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{symptoms.length}</Text>
-            <Text style={styles.statLabel}>Total Entries</Text>
+            <Text style={styles.statNumber}>{doctorVisits.length}</Text>
+            <Text style={styles.statLabel}>Total Visits</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{thisWeekSymptoms.length}</Text>
-            <Text style={styles.statLabel}>This Week</Text>
+            <Text style={styles.statNumber}>{stats.upcoming}</Text>
+            <Text style={styles.statLabel}>Upcoming</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{avgSeverity}</Text>
-            <Text style={styles.statLabel}>Avg. Severity</Text>
+            <Text style={styles.statNumber}>{stats.past}</Text>
+            <Text style={styles.statLabel}>Past</Text>
           </View>
-          <TouchableOpacity style={styles.statItem} onPress={() => {
-            // TODO: Navigate to trends screen in Phase 5
-            console.log('Navigate to trends');
-          }}>
-            <TrendingUp size={20} color={theme.colors.primary[500]} strokeWidth={2} />
-            <Text style={styles.statLabel}>View Trends</Text>
-          </TouchableOpacity>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{stats.followUp}</Text>
+            <Text style={styles.statLabel}>Follow-up</Text>
+          </View>
         </View>
       </BaseCard>
 
-      {/* Symptoms List */}
+      {/* Visits List */}
       <ScrollView 
-        style={styles.symptomsList} 
+        style={styles.visitsList} 
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={refetch} />
         }
       >
-        {loading && symptoms.length === 0 ? (
+        {loading && doctorVisits.length === 0 ? (
           <BaseCard variant="outlined" style={styles.loadingState}>
-            <Text style={styles.loadingText}>Loading symptoms...</Text>
+            <Text style={styles.loadingText}>Loading visits...</Text>
           </BaseCard>
-        ) : filteredSymptoms.length > 0 ? (
-          filteredSymptoms.map((symptom) => (
-            <SymptomCard
-              key={symptom.id}
-              {...symptom}
+        ) : filteredVisits.length > 0 ? (
+          filteredVisits.map((visit) => (
+            <DoctorVisitCard
+              key={visit.id}
+              {...visit}
               onPress={() => {
-                // TODO: Navigate to symptom detail in Phase 2
-                console.log('Navigate to symptom detail:', symptom.id);
+                // TODO: Navigate to visit detail in Phase 2
+                console.log('Navigate to visit detail:', visit.id);
               }}
             />
           ))
         ) : (
           <BaseCard variant="outlined" style={styles.emptyState}>
             <Text style={styles.emptyStateText}>
-              {searchQuery || selectedFilter !== 'all' ? 'No symptoms found' : 'No symptoms logged yet'}
+              {searchQuery || selectedFilter !== 'all' ? 'No visits found' : 'No doctor visits logged yet'}
             </Text>
             <Text style={styles.emptyStateSubtext}>
               {searchQuery || selectedFilter !== 'all' 
                 ? 'Try adjusting your search or filters' 
-                : 'Start tracking your symptoms to see them here'
+                : 'Start tracking your medical appointments to see them here'
               }
             </Text>
             {!searchQuery && selectedFilter === 'all' && (
               <BaseButton
-                title="Log Your First Symptom"
-                onPress={() => router.push('/add-symptom')}
+                title="Add Your First Visit"
+                onPress={() => router.push('/add-doctor-visit')}
                 variant="primary"
                 size="md"
                 style={styles.emptyStateButton}
@@ -242,7 +234,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   
-  symptomsList: {
+  visitsList: {
     flex: 1,
     paddingHorizontal: theme.spacing['2xl'],
   },
