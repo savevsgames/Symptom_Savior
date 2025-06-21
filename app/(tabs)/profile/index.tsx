@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { User, Heart, Pill, AlertTriangle, Settings, CircleHelp as HelpCircle, ChevronRight, Activity, Calendar, Stethoscope, Shield, FileText, LogOut } from 'lucide-react-native';
+import { User, Heart, Pill, TriangleAlert as AlertTriangle, Settings, CircleHelp as HelpCircle, ChevronRight, Activity, Calendar, Stethoscope, Shield, FileText, LogOut } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { BaseCard } from '@/components/ui';
 import { useProfile } from '@/hooks/useProfile';

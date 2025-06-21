@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Plus, X, Heart, Pill, AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, Plus, X, Heart, Pill, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 import { BaseButton, BaseTextInput, BaseCard } from '@/components/ui';
 import { useProfile } from '@/hooks/useProfile';
 import { theme } from '@/lib/theme';
