@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Send, Bot, User, Heart, TriangleAlert as AlertTriangle, Mic, MicOff, Volume2, VolumeX } from 'lucide-react-native';
+import { Send, Bot, User, Heart, TriangleAlert as AlertTriangle, Volume2, VolumeX } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import { useProfile } from '@/hooks/useProfile';
 import { useSymptoms } from '@/hooks/useSymptoms';
-import { callTxAgent, logConsultation, detectEmergency, generateFallbackResponse, transcribeAudio, type TxAgentRequest, type TxAgentResponse } from '@/lib/api';
+import { callTxAgent, logConsultation, detectEmergency, generateFallbackResponse, type TxAgentRequest, type TxAgentResponse } from '@/lib/api';
+import { VoiceRecordButton } from '@/components/ui/VoiceRecordButton';
+import { type TranscriptionResult } from '@/lib/speech';
 import { Config } from '@/lib/config';
 import { logger } from '@/utils/logger';
 
@@ -35,8 +37,6 @@ export default function Assistant() {
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [contextInitialized, setContextInitialized] = useState(false);
   const [sessionId, setSessionId] = useState<string>(`session_${Date.now()}`);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -105,27 +105,27 @@ export default function Assistant() {
     return context;
   };
 
-  const sendMessage = async () => {
-    if (!inputText.trim()) return;
+  const sendMessage = async (messageText?: string) => {
+    const textToSend = messageText || inputText.trim();
+    if (!textToSend) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText.trim(),
+      text: textToSend,
       isBot: false,
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
-    const originalInput = inputText.trim();
     setInputText('');
     setIsTyping(true);
 
     try {
       // Build context for personalized responses
       const shouldUseContext = profile && (!contextInitialized || 
-        originalInput.toLowerCase().includes('my') || 
-        originalInput.toLowerCase().includes('personal') ||
-        originalInput.toLowerCase().includes('history'));
+        textToSend.toLowerCase().includes('my') || 
+        textToSend.toLowerCase().includes('personal') ||
+        textToSend.toLowerCase().includes('history'));
 
       const context = shouldUseContext ? buildUserContext() : undefined;
 
@@ -135,7 +135,7 @@ export default function Assistant() {
 
       // Prepare TxAgent request
       const request: TxAgentRequest = {
-        query: originalInput,
+        query: textToSend,
         context,
         include_voice: Config.features.enableVoice,
         include_video: Config.features.enableVideoAvatar,
@@ -154,7 +154,7 @@ export default function Assistant() {
         logger.error('TxAgent call failed, using fallback', error);
         
         // Use fallback response if TxAgent is unavailable
-        response = generateFallbackResponse(originalInput);
+        response = generateFallbackResponse(textToSend);
         
         // Show user-friendly error message
         Alert.alert(
@@ -215,7 +215,7 @@ export default function Assistant() {
         text: "I'm sorry, I'm having trouble processing your request right now. Please try again in a moment. If you're experiencing a medical emergency, please contact emergency services immediately.",
         isBot: true,
         timestamp: new Date(),
-        emergencyDetected: detectEmergency(originalInput).isEmergency,
+        emergencyDetected: detectEmergency(textToSend).isEmergency,
       };
 
       setMessages(prev => [...prev, errorMessage]);
@@ -224,76 +224,16 @@ export default function Assistant() {
     }
   };
 
-  const startRecording = async () => {
-    if (!Config.features.enableVoice) {
-      Alert.alert('Voice Disabled', 'Voice features are currently disabled.');
-      return;
-    }
-
-    try {
-      logger.debug('Starting audio recording');
-      
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant microphone permission to use voice input.');
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      setRecording(recording);
-      setIsRecording(true);
-      logger.info('Recording started');
-    } catch (error) {
-      logger.error('Failed to start recording', error);
-      Alert.alert('Recording Error', 'Failed to start voice recording. Please try again.');
+  const handleVoiceTranscription = (result: TranscriptionResult) => {
+    if (result.text.trim()) {
+      logger.info('Voice transcription received', { text: result.text });
+      sendMessage(result.text);
     }
   };
 
-  const stopRecording = async () => {
-    if (!recording) return;
-
-    try {
-      logger.debug('Stopping audio recording');
-      setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      
-      const uri = recording.getURI();
-      setRecording(null);
-
-      if (uri) {
-        // Convert recording to blob for transcription
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        
-        // Transcribe audio
-        setIsTyping(true);
-        try {
-          const transcription = await transcribeAudio(blob);
-          if (transcription.trim()) {
-            setInputText(transcription);
-            logger.info('Audio transcribed successfully', { length: transcription.length });
-          } else {
-            Alert.alert('No Speech Detected', 'Please try speaking more clearly or use text input.');
-          }
-        } catch (error) {
-          logger.error('Transcription failed', error);
-          Alert.alert('Transcription Error', 'Failed to convert speech to text. Please try typing your message.');
-        } finally {
-          setIsTyping(false);
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to stop recording', error);
-      Alert.alert('Recording Error', 'Failed to process voice recording.');
-    }
+  const handleVoiceError = (error: string) => {
+    logger.error('Voice input error', error);
+    Alert.alert('Voice Input Error', error);
   };
 
   const playAudioResponse = async (audioUrl: string, messageId: string) => {
@@ -329,7 +269,7 @@ export default function Assistant() {
   };
 
   const sendQuickPrompt = (prompt: string) => {
-    setInputText(prompt);
+    sendMessage(prompt);
   };
 
   const formatTime = (date: Date) => {
@@ -517,26 +457,24 @@ export default function Assistant() {
             placeholderTextColor="#94A3B8"
             multiline
             maxLength={500}
+            onSubmitEditing={() => sendMessage()}
           />
           
           {/* Voice Input Button */}
           {Config.features.enableVoice && (
-            <TouchableOpacity
-              style={[styles.voiceInputButton, isRecording && styles.voiceInputButtonRecording]}
-              onPress={isRecording ? stopRecording : startRecording}
+            <VoiceRecordButton
+              onTranscription={handleVoiceTranscription}
+              onError={handleVoiceError}
               disabled={isTyping}
-            >
-              {isRecording ? (
-                <MicOff size={20} color="#FFFFFF" strokeWidth={2} />
-              ) : (
-                <Mic size={20} color="#0066CC" strokeWidth={2} />
-              )}
-            </TouchableOpacity>
+              maxDuration={30000} // 30 seconds
+              size="md"
+              style={styles.voiceInputButton}
+            />
           )}
           
           <TouchableOpacity 
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-            onPress={sendMessage}
+            onPress={() => sendMessage()}
             disabled={!inputText.trim() || isTyping}
           >
             <Send size={20} color={inputText.trim() ? "#FFFFFF" : "#94A3B8"} strokeWidth={2} />
@@ -798,16 +736,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   voiceInputButton: {
-    backgroundColor: '#F1F5F9',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 8,
-  },
-  voiceInputButtonRecording: {
-    backgroundColor: '#DC2626',
   },
   sendButton: {
     backgroundColor: '#0066CC',
