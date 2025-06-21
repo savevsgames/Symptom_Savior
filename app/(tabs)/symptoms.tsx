@@ -14,22 +14,42 @@ export default function Symptoms() {
 
   const filterOptions = [
     { key: 'all', label: 'All' },
-    { key: 'mild', label: 'Mild' },
-    { key: 'moderate', label: 'Moderate' },
-    { key: 'severe', label: 'Severe' },
+    { key: 'minimal', label: 'Minimal (1-2)' },
+    { key: 'mild', label: 'Mild (3-4)' },
+    { key: 'moderate', label: 'Moderate (5-6)' },
+    { key: 'severe', label: 'Severe (7-8)' },
+    { key: 'very-severe', label: 'Very Severe (9-10)' },
   ];
 
   const filteredSymptoms = symptoms.filter(symptom => {
     const matchesSearch = symptom.symptom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (symptom.description && symptom.description.toLowerCase().includes(searchQuery.toLowerCase()));
+                         (symptom.description && symptom.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                         (symptom.triggers && symptom.triggers.toLowerCase().includes(searchQuery.toLowerCase()));
     
     if (selectedFilter === 'all') return matchesSearch;
-    if (selectedFilter === 'mild') return matchesSearch && symptom.severity <= 2;
-    if (selectedFilter === 'moderate') return matchesSearch && symptom.severity === 3;
-    if (selectedFilter === 'severe') return matchesSearch && symptom.severity >= 4;
+    if (selectedFilter === 'minimal') return matchesSearch && symptom.severity <= 2;
+    if (selectedFilter === 'mild') return matchesSearch && symptom.severity >= 3 && symptom.severity <= 4;
+    if (selectedFilter === 'moderate') return matchesSearch && symptom.severity >= 5 && symptom.severity <= 6;
+    if (selectedFilter === 'severe') return matchesSearch && symptom.severity >= 7 && symptom.severity <= 8;
+    if (selectedFilter === 'very-severe') return matchesSearch && symptom.severity >= 9;
     
     return matchesSearch;
   });
+
+  const getStatsForPeriod = (days: number) => {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    return symptoms.filter(symptom => {
+      const symptomDate = new Date(symptom.created_at);
+      return symptomDate >= cutoffDate;
+    });
+  };
+
+  const thisWeekSymptoms = getStatsForPeriod(7);
+  const avgSeverity = symptoms.length > 0 
+    ? (symptoms.reduce((sum, s) => sum + s.severity, 0) / symptoms.length).toFixed(1)
+    : '0';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -47,7 +67,7 @@ export default function Symptoms() {
       {/* Search */}
       <View style={styles.searchSection}>
         <BaseTextInput
-          placeholder="Search symptoms..."
+          placeholder="Search symptoms, descriptions, or triggers..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           leftIcon={<Search size={20} color={theme.colors.text.tertiary} strokeWidth={2} />}
@@ -80,17 +100,17 @@ export default function Symptoms() {
             <Text style={styles.statLabel}>Total Entries</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>
-              {symptoms.filter(s => {
-                const today = new Date();
-                const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-                const symptomDate = new Date(s.created_at);
-                return symptomDate >= weekAgo;
-              }).length}
-            </Text>
+            <Text style={styles.statNumber}>{thisWeekSymptoms.length}</Text>
             <Text style={styles.statLabel}>This Week</Text>
           </View>
-          <TouchableOpacity style={styles.statItem}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{avgSeverity}</Text>
+            <Text style={styles.statLabel}>Avg. Severity</Text>
+          </View>
+          <TouchableOpacity style={styles.statItem} onPress={() => {
+            // TODO: Navigate to trends screen in Phase 5
+            console.log('Navigate to trends');
+          }}>
             <TrendingUp size={20} color={theme.colors.primary[500]} strokeWidth={2} />
             <Text style={styles.statLabel}>View Trends</Text>
           </TouchableOpacity>
@@ -115,7 +135,8 @@ export default function Symptoms() {
               key={symptom.id}
               {...symptom}
               onPress={() => {
-                // Navigate to symptom detail when implemented
+                // TODO: Navigate to symptom detail in Phase 2
+                console.log('Navigate to symptom detail:', symptom.id);
               }}
             />
           ))

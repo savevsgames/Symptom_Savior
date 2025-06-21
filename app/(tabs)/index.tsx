@@ -11,19 +11,32 @@ import { theme } from '@/lib/theme';
 const { width } = Dimensions.get('window');
 
 export default function Dashboard() {
-  const { symptoms, loading } = useSymptoms();
+  const { symptoms, treatments, doctorVisits, loading } = useSymptoms();
   const { user } = useAuthContext();
   
   // Get recent symptoms (last 3)
   const recentSymptoms = symptoms.slice(0, 3);
   
-  // Calculate stats
-  const todaySymptoms = symptoms.filter(s => s.date === new Date().toLocaleDateString()).length;
+  // Calculate real stats
+  const todaySymptoms = symptoms.filter(s => {
+    const today = new Date().toDateString();
+    const symptomDate = new Date(s.created_at).toDateString();
+    return today === symptomDate;
+  }).length;
+  
   const avgSeverity = symptoms.length > 0 
     ? (symptoms.reduce((sum, s) => sum + s.severity, 0) / symptoms.length).toFixed(1)
     : '0';
-  const goodDaysPercent = symptoms.length > 0
-    ? Math.round((symptoms.filter(s => s.severity <= 2).length / symptoms.length) * 100)
+    
+  const thisWeekSymptoms = symptoms.filter(s => {
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const symptomDate = new Date(s.created_at);
+    return symptomDate >= weekAgo;
+  });
+  
+  const goodDaysPercent = thisWeekSymptoms.length > 0
+    ? Math.round((thisWeekSymptoms.filter(s => s.severity <= 3).length / thisWeekSymptoms.length) * 100)
     : 100;
 
   const getGreeting = () => {
@@ -31,6 +44,16 @@ export default function Dashboard() {
     if (hour < 12) return 'Good morning!';
     if (hour < 18) return 'Good afternoon!';
     return 'Good evening!';
+  };
+
+  const getUserName = () => {
+    if (user?.user_metadata?.full_name) {
+      return user.user_metadata.full_name.split(' ')[0];
+    }
+    if (user?.email) {
+      return user.email.split('@')[0];
+    }
+    return 'there';
   };
 
   return (
@@ -41,7 +64,7 @@ export default function Dashboard() {
           <View style={styles.headerContent}>
             <View>
               <Text style={styles.greeting}>{getGreeting()}</Text>
-              <Text style={styles.subtitle}>How are you feeling today?</Text>
+              <Text style={styles.subtitle}>How are you feeling today, {getUserName()}?</Text>
             </View>
             <Image 
               source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
@@ -64,7 +87,7 @@ export default function Dashboard() {
           
           <View style={styles.secondaryActions}>
             <BaseButton
-              title="View Trends"
+              title="View History"
               onPress={() => router.push('/(tabs)/symptoms')}
               variant="outline"
               size="md"
@@ -87,7 +110,7 @@ export default function Dashboard() {
           <View style={styles.summaryStats}>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{todaySymptoms}</Text>
-              <Text style={styles.statLabel}>Symptoms Logged</Text>
+              <Text style={styles.statLabel}>Symptoms Today</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
@@ -98,6 +121,25 @@ export default function Dashboard() {
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{goodDaysPercent}%</Text>
               <Text style={styles.statLabel}>Good Days</Text>
+            </View>
+          </View>
+        </BaseCard>
+
+        {/* Weekly Overview */}
+        <BaseCard variant="elevated" style={styles.summaryCard}>
+          <Text style={styles.cardTitle}>This Week</Text>
+          <View style={styles.weeklyStats}>
+            <View style={styles.weeklyStatItem}>
+              <Text style={styles.weeklyStatNumber}>{thisWeekSymptoms.length}</Text>
+              <Text style={styles.weeklyStatLabel}>Symptoms Logged</Text>
+            </View>
+            <View style={styles.weeklyStatItem}>
+              <Text style={styles.weeklyStatNumber}>{treatments.length}</Text>
+              <Text style={styles.weeklyStatLabel}>Active Treatments</Text>
+            </View>
+            <View style={styles.weeklyStatItem}>
+              <Text style={styles.weeklyStatNumber}>{doctorVisits.length}</Text>
+              <Text style={styles.weeklyStatLabel}>Doctor Visits</Text>
             </View>
           </View>
         </BaseCard>
@@ -125,6 +167,7 @@ export default function Dashboard() {
                 {...symptom}
                 onPress={() => {
                   // Navigate to symptom detail when implemented
+                  console.log('Navigate to symptom detail:', symptom.id);
                 }}
               />
             ))
@@ -147,7 +190,12 @@ export default function Dashboard() {
             <Text style={styles.tipTitle}>Guardian's Daily Wisdom</Text>
           </View>
           <Text style={styles.tipText}>
-            Regular symptom tracking helps identify patterns and triggers. Try to log symptoms as they occur for the most accurate data. Your guardian is always here to help guide you on your health journey.
+            {symptoms.length === 0 
+              ? "Welcome to Symptom Savior! Start by logging your first symptom to begin tracking your health journey. I'm here to help you understand patterns and provide guidance."
+              : symptoms.length < 5
+              ? "Great start on your health tracking! The more consistently you log symptoms, the better I can help identify patterns and provide personalized insights."
+              : "Excellent tracking consistency! I can see patterns forming in your data. Consider asking me about your symptom trends or any health concerns you might have."
+            }
           </Text>
           <BaseButton
             title="Chat with Guardian"
@@ -256,6 +304,29 @@ const styles = StyleSheet.create({
     height: 40,
     backgroundColor: theme.colors.border.light,
     marginHorizontal: theme.spacing.lg,
+  },
+  
+  weeklyStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  
+  weeklyStatItem: {
+    alignItems: 'center',
+  },
+  
+  weeklyStatNumber: {
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.fontSize.xl,
+    color: theme.colors.secondary[500],
+    marginBottom: theme.spacing.xs,
+  },
+  
+  weeklyStatLabel: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.secondary,
+    textAlign: 'center',
   },
   
   recentSection: {
