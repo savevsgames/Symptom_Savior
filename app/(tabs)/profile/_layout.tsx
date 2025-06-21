@@ -8,7 +8,6 @@ export default function ProfileLayout() {
         gestureEnabled: true,
       }}
     >
-      <Stack.Screen name="index" />
       <Stack.Screen name="personal-info" />
       <Stack.Screen name="medical-history" />
     </Stack>
