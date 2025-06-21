@@ -1,5 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TextInput, View, Text, StyleSheet, TextInputProps, ViewStyle } from 'react-native';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming, 
+  interpolate,
+  Extrapolate 
+} from 'react-native-reanimated';
 import { theme } from '@/lib/theme';
 
 export interface BaseTextInputProps extends Omit<TextInputProps, 'style'> {
@@ -24,9 +31,48 @@ export function BaseTextInput({
   inputStyle,
   variant = 'outline',
   size = 'md',
+  value,
   ...textInputProps
 }: BaseTextInputProps) {
   const [isFocused, setIsFocused] = useState(false);
+  const labelAnimation = useSharedValue(0);
+
+  // Determine if label should be floating
+  const shouldFloat = isFocused || (value && value.length > 0);
+
+  useEffect(() => {
+    labelAnimation.value = withTiming(shouldFloat ? 1 : 0, {
+      duration: 200,
+    });
+  }, [shouldFloat, labelAnimation]);
+
+  const animatedLabelStyle = useAnimatedStyle(() => {
+    const translateY = interpolate(
+      labelAnimation.value,
+      [0, 1],
+      [0, -28],
+      Extrapolate.CLAMP
+    );
+
+    const scale = interpolate(
+      labelAnimation.value,
+      [0, 1],
+      [1, 0.85],
+      Extrapolate.CLAMP
+    );
+
+    const color = interpolate(
+      labelAnimation.value,
+      [0, 1],
+      [0, 1],
+      Extrapolate.CLAMP
+    );
+
+    return {
+      transform: [{ translateY }, { scale }],
+      color: color === 1 ? theme.colors.primary[500] : theme.colors.text.secondary,
+    };
+  });
 
   const containerStyles = [
     styles.container,
@@ -44,23 +90,31 @@ export function BaseTextInput({
   const inputStyles = [
     styles.input,
     styles[`${size}Input`],
+    shouldFloat && styles.inputFloating,
     inputStyle,
   ];
 
   return (
     <View style={containerStyles}>
-      {label && <Text style={styles.label}>{label}</Text>}
-      
       <View style={inputContainerStyles}>
         {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
         
-        <TextInput
-          style={inputStyles}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          placeholderTextColor={theme.colors.text.tertiary}
-          {...textInputProps}
-        />
+        <View style={styles.inputWrapper}>
+          {label && (
+            <Animated.Text style={[styles.floatingLabel, animatedLabelStyle]}>
+              {label}
+            </Animated.Text>
+          )}
+          
+          <TextInput
+            style={inputStyles}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            placeholderTextColor={theme.colors.text.tertiary}
+            value={value}
+            {...textInputProps}
+          />
+        </View>
         
         {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
       </View>
@@ -76,17 +130,11 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   
-  label: {
-    fontFamily: theme.typography.fontFamily.medium,
-    fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.text.primary,
-    marginBottom: theme.spacing.xs,
-  },
-  
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: theme.borderRadius.md,
+    position: 'relative',
   },
   
   // Variants
@@ -134,10 +182,20 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.error[500],
   },
   
-  input: {
+  inputWrapper: {
     flex: 1,
+    position: 'relative',
+  },
+  
+  input: {
     fontFamily: theme.typography.fontFamily.regular,
     color: theme.colors.text.primary,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  
+  inputFloating: {
+    paddingTop: 12,
   },
   
   smInput: {
@@ -150,6 +208,18 @@ const styles = StyleSheet.create({
   
   lgInput: {
     fontSize: theme.typography.fontSize.lg,
+  },
+  
+  floatingLabel: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.secondary,
+    backgroundColor: theme.colors.background.primary,
+    paddingHorizontal: 4,
+    zIndex: 1,
   },
   
   leftIcon: {

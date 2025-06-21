@@ -72,7 +72,7 @@ export default function Dashboard() {
               <Text style={styles.subtitle}>How are you feeling today, {getUserName()}?</Text>
             </View>
             <Image 
-              source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+              source={{ uri: 'https://images.pexels.com/photos/4386467/pexels-photo-4386467.jpeg' }}
               style={styles.guardianImage}
               resizeMode="contain"
             />
@@ -192,7 +192,7 @@ export default function Dashboard() {
                 key={symptom.id}
                 {...symptom}
                 onPress={() => {
-                  console.log('Navigate to symptom detail:', symptom.id);
+                  router.push(`/(tabs)/symptoms/${symptom.id}`);
                 }}
               />
             ))
@@ -276,7 +276,7 @@ export default function Dashboard() {
         <BaseCard variant="filled" style={styles.tipCard}>
           <View style={styles.tipHeader}>
             <Image 
-              source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+              source={{ uri: 'https://images.pexels.com/photos/4145353/pexels-photo-4145353.jpeg' }}
               style={styles.tipAvatar}
               resizeMode="contain"
             />
@@ -336,6 +336,7 @@ const styles = StyleSheet.create({
   guardianImage: {
     width: 80,
     height: 80,
+    borderRadius: 40,
   },
   
   quickActions: {
@@ -506,6 +507,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     marginRight: theme.spacing.sm,
+    borderRadius: 12,
   },
   
   tipTitle: {
