@@ -107,10 +107,7 @@ export default function Symptoms() {
             <Text style={styles.statNumber}>{avgSeverity}</Text>
             <Text style={styles.statLabel}>Avg. Severity</Text>
           </View>
-          <TouchableOpacity style={styles.statItem} onPress={() => {
-            // TODO: Navigate to trends screen in Phase 5
-            console.log('Navigate to trends');
-          }}>
+          <TouchableOpacity style={styles.statItem} onPress={() => router.push('/trends')}>
             <TrendingUp size={20} color={theme.colors.primary[500]} strokeWidth={2} />
             <Text style={styles.statLabel}>View Trends</Text>
           </TouchableOpacity>

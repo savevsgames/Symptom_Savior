@@ -141,7 +141,12 @@ export default function Dashboard() {
 
         {/* Weekly Overview */}
         <BaseCard variant="elevated" style={styles.summaryCard}>
-          <Text style={styles.cardTitle}>This Week</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>This Week</Text>
+            <TouchableOpacity onPress={() => router.push('/trends')}>
+              <TrendingUp size={20} color={theme.colors.primary[500]} strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
           <View style={styles.weeklyStats}>
             <View style={styles.weeklyStatItem}>
               <Text style={styles.weeklyStatNumber}>{thisWeekSymptoms.length}</Text>
@@ -156,6 +161,13 @@ export default function Dashboard() {
               <Text style={styles.weeklyStatLabel}>Upcoming Visits</Text>
             </View>
           </View>
+          <BaseButton
+            title="View Trends"
+            onPress={() => router.push('/trends')}
+            variant="ghost"
+            size="sm"
+            style={styles.trendsButton}
+          />
         </BaseCard>
 
         {/* Recent Symptoms */}
@@ -362,6 +374,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
   },
   
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: theme.spacing.lg,
+  },
+  
   summaryStats: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -396,6 +415,7 @@ const styles = StyleSheet.create({
   weeklyStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    marginBottom: theme.spacing.md,
   },
   
   weeklyStatItem: {
@@ -414,6 +434,10 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     color: theme.colors.text.secondary,
     textAlign: 'center',
+  },
+  
+  trendsButton: {
+    alignSelf: 'center',
   },
   
   recentSection: {
