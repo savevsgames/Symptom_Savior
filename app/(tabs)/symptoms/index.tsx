@@ -132,8 +132,7 @@ export default function Symptoms() {
               key={symptom.id}
               {...symptom}
               onPress={() => {
-                // TODO: Navigate to symptom detail in Phase 2
-                console.log('Navigate to symptom detail:', symptom.id);
+                router.push(`/(tabs)/symptoms/${symptom.id}`);
               }}
             />
           ))
