@@ -15,5 +15,8 @@ export type { BaseCardProps } from './BaseCard';
 export { SymptomCard } from './SymptomCard';
 export type { SymptomCardProps } from './SymptomCard';
 
+export { TreatmentCard } from './TreatmentCard';
+export type { TreatmentCardProps } from './TreatmentCard';
+
 export { VoiceInput } from './VoiceInput';
 export type { VoiceInputProps } from './VoiceInput';

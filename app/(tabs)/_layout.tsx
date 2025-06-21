@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Activity, MessageCircle, User } from 'lucide-react-native';
+import { Chrome as Home, Activity, Pill, MessageCircle, User } from 'lucide-react-native';
 import { StyleSheet } from 'react-native';
 
 export default function TabLayout() {
@@ -27,6 +27,15 @@ export default function TabLayout() {
           title: 'Symptoms',
           tabBarIcon: ({ size, color }) => (
             <Activity size={size} color={color} strokeWidth={2} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="treatments"
+        options={{
+          title: 'Treatments',
+          tabBarIcon: ({ size, color }) => (
+            <Pill size={size} color={color} strokeWidth={2} />
           ),
         }}
       />
