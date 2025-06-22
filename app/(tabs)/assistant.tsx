@@ -8,6 +8,7 @@ import { useSymptoms } from '@/hooks/useSymptoms';
 import { callTxAgent, logConsultation, detectEmergency, generateFallbackResponse, type TxAgentRequest, type TxAgentResponse } from '@/lib/api';
 import { VoiceRecordButton } from '@/components/ui/VoiceRecordButton';
 import { type TranscriptionResult } from '@/lib/speech';
+import { ttsService } from '@/lib/tts';
 import { Config } from '@/lib/config';
 import { logger } from '@/utils/logger';
 
@@ -215,9 +216,15 @@ export default function Assistant() {
         }, 1000);
       }
 
-      // Auto-play voice response if available
-      if (response.media?.voice_audio_url && Config.features.enableVoice) {
-        playAudioResponse(response.media.voice_audio_url, botMessage.id);
+      // Generate and play TTS response if voice is enabled
+      if (Config.features.enableVoice && Config.voice.elevenLabsApiKey) {
+        // Use provided voice URL or generate TTS
+        if (response.media?.voice_audio_url) {
+          playAudioResponse(response.media.voice_audio_url, botMessage.id);
+        } else {
+          // Generate TTS for the response
+          generateTTSResponse(response.response.text, botMessage.id);
+        }
       }
 
     } catch (error) {
@@ -234,6 +241,48 @@ export default function Assistant() {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const generateTTSResponse = async (text: string, messageId: string) => {
+    try {
+      logger.debug('Generating TTS for AI response', { messageId });
+      setPlayingAudio(messageId);
+
+      // Clean text for TTS (remove markdown, excessive punctuation)
+      const cleanText = text
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markdown
+        .replace(/\*(.*?)\*/g, '$1')     // Remove italic markdown
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
+        .replace(/\n+/g, ' ')            // Replace newlines with spaces
+        .replace(/\s+/g, ' ')            // Normalize whitespace
+        .trim();
+
+      const result = await ttsService.generateSpeech(cleanText, {
+        voice_id: 'EXAVITQu4vr4xnSDxMaL', // Bella - professional female voice
+        model_id: 'eleven_turbo_v2',       // Fast, cost-effective
+        voice_settings: {
+          stability: 0.6,
+          similarity_boost: 0.8,
+          style: 0.2,
+          use_speaker_boost: true,
+        },
+      });
+
+      if (result.error) {
+        logger.error('TTS generation failed', result.error);
+        setPlayingAudio(null);
+        return;
+      }
+
+      if (result.audioUrl) {
+        await ttsService.playAudio(result.audioUrl);
+        logger.info('TTS playback completed');
+      }
+    } catch (error) {
+      logger.error('TTS generation/playback failed', error);
+    } finally {
+      setPlayingAudio(null);
     }
   };
 
@@ -273,8 +322,7 @@ export default function Assistant() {
 
   const stopAudioPlayback = async () => {
     try {
-      await Audio.setIsEnabledAsync(false);
-      await Audio.setIsEnabledAsync(true);
+      await ttsService.stopAudio();
       setPlayingAudio(null);
     } catch (error) {
       logger.error('Failed to stop audio playback', error);
@@ -379,14 +427,14 @@ export default function Assistant() {
                 </Text>
 
                 {/* Voice Playback Button */}
-                {message.voiceUrl && Config.features.enableVoice && (
+                {message.isBot && Config.features.enableVoice && (
                   <TouchableOpacity
                     style={styles.voiceButton}
                     onPress={() => {
                       if (playingAudio === message.id) {
                         stopAudioPlayback();
                       } else {
-                        playAudioResponse(message.voiceUrl!, message.id);
+                        generateTTSResponse(message.text, message.id);
                       }
                     }}
                   >
