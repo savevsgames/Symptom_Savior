@@ -522,8 +522,8 @@ Status: Pending
 Progress: The AI assistant currently sends a full context object, but a concise summary string has not yet been implemented.
 
 #### Issue #29: Secure ElevenLabs integration by moving API key to backend
-Status: Pending
-Progress: The ElevenLabs API key is still directly used on the client-side; it needs to be moved to a backend endpoint.
+Status: Completed
+Progress: The ElevenLabs API key has been moved to the backend with new API routes for transcription and TTS.
 
 #### Issue #30: Add floating‑label behaviour to BaseTextInput
 Status: Completed

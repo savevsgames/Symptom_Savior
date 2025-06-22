@@ -1,10 +1,10 @@
 /**
  * Speech-to-Text Integration
- * Handles audio recording and transcription with ElevenLabs integration
+ * Handles audio recording and transcription via secure backend API
  */
 
 import { Platform } from 'react-native';
-import { Config } from './config';
+import { supabase } from './supabase';
 import { logger } from '@/utils/logger';
 
 export interface TranscriptionResult {
@@ -187,19 +187,21 @@ class SpeechService {
   }
 
   /**
-   * Transcribe audio using ElevenLabs API
+   * Transcribe audio using secure backend API
    */
   async transcribeAudio(audioUri: string): Promise<TranscriptionResult> {
-    if (!Config.voice.elevenLabsApiKey) {
-      throw new Error('ElevenLabs API key not configured');
-    }
-
     if (!this.checkRateLimit()) {
       throw new Error('Rate limit exceeded. Please wait before making more requests.');
     }
 
     try {
-      logger.debug('Starting audio transcription', { audioUri });
+      logger.debug('Starting audio transcription via backend API', { audioUri });
+
+      // Get current session for authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication required for transcription');
+      }
 
       // Convert audio URI to blob
       const audioBlob = await this.uriToBlob(audioUri);
@@ -207,39 +209,39 @@ class SpeechService {
       // Prepare form data
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.wav');
-      formData.append('model', 'whisper-1');
 
-      // Call ElevenLabs Speech-to-Text API
-      const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      // Call our secure backend API
+      const response = await fetch('/api/voice/transcribe', {
         method: 'POST',
         headers: {
-          'xi-api-key': Config.voice.elevenLabsApiKey,
-          // Don't set Content-Type for FormData - let the browser set it
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: formData,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error('ElevenLabs STT API error', { 
+        logger.error('Backend transcription API error', { 
           status: response.status, 
           error: errorText 
         });
         
         if (response.status === 401) {
-          throw new Error('Invalid API key. Please check your ElevenLabs configuration.');
+          throw new Error('Authentication failed. Please sign in again.');
         } else if (response.status === 429) {
-          throw new Error('API rate limit exceeded. Please try again later.');
-        } else if (response.status === 422) {
+          throw new Error('Too many requests. Please wait before trying again.');
+        } else if (response.status === 400) {
           throw new Error('Invalid audio format. Please try recording again.');
+        } else if (response.status === 503) {
+          throw new Error('Voice service temporarily unavailable. Please try again later.');
         } else {
-          throw new Error(`Transcription failed: ${response.statusText}`);
+          throw new Error('Transcription failed. Please try again.');
         }
       }
 
       const result = await response.json();
       
-      logger.info('Audio transcription completed', { 
+      logger.info('Audio transcription completed via backend', { 
         textLength: result.text?.length || 0,
         confidence: result.confidence 
       });
@@ -251,7 +253,7 @@ class SpeechService {
       };
     } catch (error) {
       logger.error('Audio transcription failed', error);
-      throw new Error('Failed to transcribe audio. Please try again.');
+      throw error;
     }
   }
 
