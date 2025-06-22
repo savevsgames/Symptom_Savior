@@ -1,10 +1,11 @@
 /**
- * Text-to-Speech Service using ElevenLabs
- * Handles audio generation and playback with security measures
+ * Text-to-Speech Service
+ * Handles audio generation and playback via secure backend API
  */
 
 import { Audio } from 'expo-av';
 import { Platform } from 'react-native';
+import { supabase } from './supabase';
 import { Config } from './config';
 import { logger } from '@/utils/logger';
 
@@ -55,12 +56,12 @@ class TTSService {
   }
 
   /**
-   * Generate speech audio from text using ElevenLabs
+   * Generate speech audio from text using secure backend API
    */
   async generateSpeech(text: string, options: TTSOptions = {}): Promise<TTSResult> {
-    if (!Config.voice.elevenLabsApiKey) {
-      logger.warn('ElevenLabs API key not configured');
-      return { error: 'Voice service not configured' };
+    if (!Config.features.enableVoice) {
+      logger.warn('Voice features are disabled in configuration');
+      return { error: 'Voice features are disabled' };
     }
 
     if (!this.checkRateLimit()) {
@@ -78,54 +79,61 @@ class TTSService {
     }
 
     try {
-      logger.debug('Generating TTS audio', { textLength: text.length });
+      logger.debug('Generating TTS audio via backend API', { textLength: text.length });
 
-      const voiceId = options.voice_id || 'EXAVITQu4vr4xnSDxMaL'; // Default Bella voice
-      const modelId = options.model_id || 'eleven_turbo_v2'; // Fast, cost-effective model
+      // Get current session for authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication required for text-to-speech');
+      }
 
-      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      // Call our secure backend API
+      const response = await fetch('/api/voice/tts', {
         method: 'POST',
         headers: {
-          'Accept': 'audio/mpeg',
           'Content-Type': 'application/json',
-          'xi-api-key': Config.voice.elevenLabsApiKey,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           text,
-          model_id: modelId,
-          voice_settings: {
+          voice_id: options.voice_id || 'EXAVITQu4vr4xnSDxMaL', // Default Bella voice
+          model_id: options.model_id || 'eleven_turbo_v2', // Fast, cost-effective model
+          voice_settings: options.voice_settings || {
             stability: 0.5,
             similarity_boost: 0.75,
             style: 0.0,
             use_speaker_boost: true,
-            ...options.voice_settings,
           },
         }),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error('ElevenLabs TTS API error', { 
+        logger.error('Backend TTS API error', { 
           status: response.status, 
           error: errorText 
         });
         
         if (response.status === 401) {
-          return { error: 'Invalid API key. Please check your ElevenLabs configuration.' };
+          return { error: 'Authentication failed. Please sign in again.' };
         } else if (response.status === 429) {
-          return { error: 'API rate limit exceeded. Please try again later.' };
-        } else if (response.status === 422) {
-          return { error: 'Invalid request. Please check the text content.' };
+          return { error: 'Too many requests. Please wait before trying again.' };
+        } else if (response.status === 400) {
+          return { error: 'Invalid text content. Please try again with different text.' };
+        } else if (response.status === 503) {
+          return { error: 'Voice service temporarily unavailable. Please try again later.' };
         } else {
           return { error: 'Failed to generate speech. Please try again.' };
         }
       }
 
-      // Convert response to blob and create object URL
+      // Get audio blob from response
       const audioBlob = await response.blob();
+      
+      // Create object URL for playback
       const audioUrl = URL.createObjectURL(audioBlob);
 
-      logger.info('TTS audio generated successfully', { 
+      logger.info('TTS audio generated successfully via backend', { 
         textLength: text.length,
         audioSize: audioBlob.size 
       });
@@ -224,34 +232,6 @@ class TTSService {
   }
 
   /**
-   * Get available voices from ElevenLabs
-   */
-  async getAvailableVoices(): Promise<any[]> {
-    if (!Config.voice.elevenLabsApiKey) {
-      return [];
-    }
-
-    try {
-      const response = await fetch('https://api.elevenlabs.io/v1/voices', {
-        headers: {
-          'xi-api-key': Config.voice.elevenLabsApiKey,
-        },
-      });
-
-      if (!response.ok) {
-        logger.error('Failed to fetch voices', { status: response.status });
-        return [];
-      }
-
-      const data = await response.json();
-      return data.voices || [];
-    } catch (error) {
-      logger.error('Error fetching voices', error);
-      return [];
-    }
-  }
-
-  /**
    * Clean up resources
    */
   private cleanup(): void {
@@ -289,6 +269,3 @@ export const stopAudio = () =>
 
 export const isAudioPlaying = () => 
   ttsService.isAudioPlaying;
-
-export const getAvailableVoices = () => 
-  ttsService.getAvailableVoices();

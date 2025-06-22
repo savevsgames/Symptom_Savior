@@ -1,5 +1,3 @@
-Here's the fixed version with missing closing brackets added:
-
 /**
  * API Integration Layer
  * Handles communication with TxAgent and other external services
@@ -137,21 +135,194 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
       confidenceScore: data.response.confidence_score,
     });
 
-    \return data;
+    return data;
   } catch (error) {
-    logger.error('TxAgent API call failed', \error);
+    logger.error('TxAgent API call failed', error);
     
-    i\f (error instanceof Error) {
+    if (error instanceof Error) {
       throw error;
-    } el\se {
+    } else {
       throw new Error('An unexpected error occurred while processing your medical consultation.');
     }
   }
 }
 
 /**
+ * Generate a unique session ID
+ */
+function generateSessionId(): string {
+  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
  * Log consultation to database
  */
 export async function logConsultation(request: TxAgentRequest, response: TxAgentResponse): Promise<void> {
-  // Implementation here
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      throw new Error('User not authenticated');
+    }
+
+    const logEntry: ConsultationLogEntry = {
+      user_id: session.user.id,
+      session_id: response.session_id,
+      query: request.query,
+      response: response.response.text,
+      sources: response.response.sources,
+      voice_audio_url: response.media?.voice_audio_url,
+      video_url: response.media?.video_url,
+      consultation_type: 'medical_consultation',
+      processing_time: response.processing_time_ms,
+      emergency_detected: response.safety.emergency_detected,
+      context_used: request.context,
+      confidence_score: response.response.confidence_score,
+      recommendations: response.recommendations,
+    };
+
+    const { error } = await supabase
+      .from('medical_consultations')
+      .insert(logEntry);
+
+    if (error) {
+      logger.error('Failed to log consultation to database:', error);
+    } else {
+      logger.info('Consultation logged to database successfully', { sessionId: response.session_id });
+    }
+  } catch (error) {
+    logger.error('Exception while logging consultation:', error);
+    // Don't throw here as logging failure shouldn't break the main flow
+  }
+}
+
+/**
+ * Check if emergency keywords are present in text
+ */
+export function detectEmergencyKeywords(text: string): boolean {
+  const emergencyKeywords = [
+    'chest pain',
+    'difficulty breathing',
+    'can\'t breathe',
+    'severe headache',
+    'loss of consciousness',
+    'unconscious',
+    'severe abdominal pain',
+    'severe bleeding',
+    'heart attack',
+    'stroke',
+    'seizure',
+    'severe allergic reaction',
+    'anaphylaxis',
+    'suicidal thoughts',
+    'suicide',
+    'overdose',
+    'poisoning',
+    'severe burn',
+    'broken bone',
+    'head injury',
+    'severe vomiting',
+    'high fever',
+    'severe pain',
+  ];
+
+  const lowerText = text.toLowerCase();
+  return emergencyKeywords.some(keyword => lowerText.includes(keyword));
+}
+
+/**
+ * Enhanced emergency detection combining keywords and severity
+ */
+export function detectEmergency(text: string, severity?: number): {
+  isEmergency: boolean;
+  reason: string;
+  confidence: 'high' | 'medium' | 'low';
+} {
+  const hasEmergencyKeywords = detectEmergencyKeywords(text);
+  const hasHighSeverity = severity !== undefined && severity >= 9;
+  
+  if (hasEmergencyKeywords && hasHighSeverity) {
+    return {
+      isEmergency: true,
+      reason: 'Critical symptoms with high severity detected',
+      confidence: 'high'
+    };
+  } else if (hasEmergencyKeywords) {
+    return {
+      isEmergency: true,
+      reason: 'Emergency symptoms detected',
+      confidence: 'medium'
+    };
+  } else if (hasHighSeverity) {
+    return {
+      isEmergency: true,
+      reason: 'Very high symptom severity reported',
+      confidence: 'low'
+    };
+  }
+  
+  return {
+    isEmergency: false,
+    reason: 'No emergency indicators detected',
+    confidence: 'high'
+  };
+}
+
+/**
+ * ElevenLabs Speech-to-Text Integration
+ */
+export async function transcribeAudio(audioBlob: Blob): Promise<string> {
+  if (!Config.voice.elevenLabsApiKey) {
+    throw new Error('ElevenLabs API key not configured');
+  }
+
+  try {
+    logger.debug('Starting audio transcription');
+
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.wav');
+    formData.append('model', 'whisper-1');
+
+    const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Config.voice.elevenLabsApiKey}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Transcription failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    logger.info('Audio transcription completed', { 
+      textLength: data.text?.length || 0 
+    });
+
+    return data.text || '';
+  } catch (error) {
+    logger.error('Audio transcription failed', error);
+    throw new Error('Failed to transcribe audio. Please try typing your message instead.');
+  }
+}
+
+/**
+ * Fallback response generator for when TxAgent is unavailable
+ */
+export function generateFallbackResponse(query: string): TxAgentResponse {
+  const sessionId = generateSessionId();
+  
+  return {
+    response: {
+      text: "I'm currently experiencing technical difficulties connecting to the medical consultation service. While I work to resolve this, please remember that if you're experiencing a medical emergency, contact emergency services immediately. For non-urgent concerns, consider consulting with your healthcare provider. You can continue to log your symptoms in the app for tracking purposes.",
+      confidence_score: 0.5,
+    },
+    safety: {
+      emergency_detected: detectEmergencyKeywords(query),
+      disclaimer: "This is an automated fallback response. For medical emergencies, call emergency services immediately. This app is not a substitute for professional medical advice.",
+      urgent_care_recommended: detectEmergencyKeywords(query),
+    },
+    processing_time_ms: 100,
+    session_id: sessionId,
+  };
 }

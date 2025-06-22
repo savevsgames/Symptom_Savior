@@ -1,10 +1,10 @@
 /**
  * Speech-to-Text Integration
- * Handles audio recording and transcription with ElevenLabs integration
+ * Handles audio recording and transcription via secure backend API
  */
 
 import { Platform } from 'react-native';
-import { Config } from './config';
+import { supabase } from './supabase';
 import { logger } from '@/utils/logger';
 
 export interface TranscriptionResult {
@@ -73,19 +73,34 @@ class SpeechService {
   async requestPermissions(): Promise<boolean> {
     try {
       if (Platform.OS === 'web') {
-        // Web permissions are handled by the browser
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        // Check if the browser supports the required APIs
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          logger.error('Web microphone API not supported');
+          return false;
+        }
+
+        // First, check current permission status without triggering a prompt
+        if (navigator.permissions && navigator.permissions.query) {
           try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            // Stop the stream immediately, we just needed to check permissions
-            stream.getTracks().forEach(track => track.stop());
-            return true;
+            const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+            
+            if (permissionStatus.state === 'granted') {
+              return true;
+            } else if (permissionStatus.state === 'denied') {
+              logger.warn('Web microphone permission previously denied');
+              return false;
+            }
+            // If state is 'prompt', we'll need to request permission when actually starting recording
+            return true; // Return true to indicate we can attempt to request permission later
           } catch (error) {
-            logger.error('Web microphone permission denied', error);
-            return false;
+            // Fallback if permissions.query is not supported
+            logger.debug('Permissions API not supported, will check on recording start');
+            return true;
           }
         }
-        return false;
+
+        // If permissions API is not available, assume we can request permission when needed
+        return true;
       }
 
       const Audio = await this.initializeAudio();
@@ -95,6 +110,21 @@ class SpeechService {
       return status === 'granted';
     } catch (error) {
       logger.error('Failed to request microphone permissions', error);
+      return false;
+    }
+  }
+
+  /**
+   * Request microphone permission with user interaction (for web)
+   */
+  private async requestWebPermissionWithPrompt(): Promise<boolean> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop the stream immediately, we just needed to check permissions
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      logger.error('Web microphone permission denied by user', error);
       return false;
     }
   }
@@ -114,29 +144,42 @@ class SpeechService {
         throw new Error('Audio recording is not available in server environment');
       }
 
-      const Audio = await this.initializeAudio();
-      if (!Audio) {
-        throw new Error('Audio module not available');
-      }
+      if (Platform.OS === 'web') {
+        // For web, request permission with user interaction when actually starting recording
+        const hasPermission = await this.requestWebPermissionWithPrompt();
+        if (!hasPermission) {
+          throw new Error('Microphone permission not granted');
+        }
+      } else {
+        const Audio = await this.initializeAudio();
+        if (!Audio) {
+          throw new Error('Audio module not available');
+        }
 
-      // Request permissions first
-      const hasPermission = await this.requestPermissions();
-      if (!hasPermission) {
-        throw new Error('Microphone permission not granted');
-      }
+        // Request permissions first for native platforms
+        const hasPermission = await this.requestPermissions();
+        if (!hasPermission) {
+          throw new Error('Microphone permission not granted');
+        }
 
-      // Configure audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
+        // Configure audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      }
 
       // Set recording options based on quality
       const recordingOptions = this.getRecordingOptions(options.quality || 'high');
 
       // Create and start recording
+      const Audio = await this.initializeAudio();
+      if (!Audio) {
+        throw new Error('Audio module not available');
+      }
+
       const { recording } = await Audio.Recording.createAsync(recordingOptions);
       this.recording = recording;
       this.isRecording = true;
@@ -187,19 +230,21 @@ class SpeechService {
   }
 
   /**
-   * Transcribe audio using ElevenLabs API
+   * Transcribe audio using secure backend API
    */
   async transcribeAudio(audioUri: string): Promise<TranscriptionResult> {
-    if (!Config.voice.elevenLabsApiKey) {
-      throw new Error('ElevenLabs API key not configured');
-    }
-
     if (!this.checkRateLimit()) {
       throw new Error('Rate limit exceeded. Please wait before making more requests.');
     }
 
     try {
-      logger.debug('Starting audio transcription', { audioUri });
+      logger.debug('Starting audio transcription via backend API', { audioUri });
+
+      // Get current session for authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication required for transcription');
+      }
 
       // Convert audio URI to blob
       const audioBlob = await this.uriToBlob(audioUri);
@@ -207,39 +252,39 @@ class SpeechService {
       // Prepare form data
       const formData = new FormData();
       formData.append('audio', audioBlob, 'recording.wav');
-      formData.append('model', 'whisper-1');
 
-      // Call ElevenLabs Speech-to-Text API
-      const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      // Call our secure backend API
+      const response = await fetch('/api/voice/transcribe', {
         method: 'POST',
         headers: {
-          'xi-api-key': Config.voice.elevenLabsApiKey,
-          // Don't set Content-Type for FormData - let the browser set it
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: formData,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error('ElevenLabs STT API error', { 
+        logger.error('Backend transcription API error', { 
           status: response.status, 
           error: errorText 
         });
         
         if (response.status === 401) {
-          throw new Error('Invalid API key. Please check your ElevenLabs configuration.');
+          throw new Error('Authentication failed. Please sign in again.');
         } else if (response.status === 429) {
-          throw new Error('API rate limit exceeded. Please try again later.');
-        } else if (response.status === 422) {
+          throw new Error('Too many requests. Please wait before trying again.');
+        } else if (response.status === 400) {
           throw new Error('Invalid audio format. Please try recording again.');
+        } else if (response.status === 503) {
+          throw new Error('Voice service temporarily unavailable. Please try again later.');
         } else {
-          throw new Error(`Transcription failed: ${response.statusText}`);
+          throw new Error('Transcription failed. Please try again.');
         }
       }
 
       const result = await response.json();
       
-      logger.info('Audio transcription completed', { 
+      logger.info('Audio transcription completed via backend', { 
         textLength: result.text?.length || 0,
         confidence: result.confidence 
       });
@@ -251,7 +296,7 @@ class SpeechService {
       };
     } catch (error) {
       logger.error('Audio transcription failed', error);
-      throw new Error('Failed to transcribe audio. Please try again.');
+      throw error;
     }
   }
 
