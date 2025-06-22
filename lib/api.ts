@@ -180,11 +180,149 @@ export async function logConsultation(request: TxAgentRequest, response: TxAgent
       recommendations: response.recommendations,
     };
 
-    // Note: This would require a consultation_logs table in the database
-    // For now, we'll just log to console
-    logger.info('Consultation logged', { sessionId: response.session_id });
+    const { error } = await supabase
+      .from('medical_consultations')
+      .insert(logEntry);
+
+    if (error) {
+      logger.error('Failed to log consultation to database:', error);
+    } else {
+      logger.info('Consultation logged to database successfully', { sessionId: response.session_id });
+    }
   } catch (error) {
-    logger.error('Failed to log consultation', error);
+    logger.error('Exception while logging consultation:', error);
     // Don't throw here as logging failure shouldn't break the main flow
   }
+}
+
+/**
+ * Check if emergency keywords are present in text
+ */
+export function detectEmergencyKeywords(text: string): boolean {
+  const emergencyKeywords = [
+    'chest pain',
+    'difficulty breathing',
+    'can\'t breathe',
+    'severe headache',
+    'loss of consciousness',
+    'unconscious',
+    'severe abdominal pain',
+    'severe bleeding',
+    'heart attack',
+    'stroke',
+    'seizure',
+    'severe allergic reaction',
+    'anaphylaxis',
+    'suicidal thoughts',
+    'suicide',
+    'overdose',
+    'poisoning',
+    'severe burn',
+    'broken bone',
+    'head injury',
+    'severe vomiting',
+    'high fever',
+    'severe pain',
+  ];
+
+  const lowerText = text.toLowerCase();
+  return emergencyKeywords.some(keyword => lowerText.includes(keyword));
+}
+
+/**
+ * Enhanced emergency detection combining keywords and severity
+ */
+export function detectEmergency(text: string, severity?: number): {
+  isEmergency: boolean;
+  reason: string;
+  confidence: 'high' | 'medium' | 'low';
+} {
+  const hasEmergencyKeywords = detectEmergencyKeywords(text);
+  const hasHighSeverity = severity !== undefined && severity >= 9;
+  
+  if (hasEmergencyKeywords && hasHighSeverity) {
+    return {
+      isEmergency: true,
+      reason: 'Critical symptoms with high severity detected',
+      confidence: 'high'
+    };
+  } else if (hasEmergencyKeywords) {
+    return {
+      isEmergency: true,
+      reason: 'Emergency symptoms detected',
+      confidence: 'medium'
+    };
+  } else if (hasHighSeverity) {
+    return {
+      isEmergency: true,
+      reason: 'Very high symptom severity reported',
+      confidence: 'low'
+    };
+  }
+  
+  return {
+    isEmergency: false,
+    reason: 'No emergency indicators detected',
+    confidence: 'high'
+  };
+}
+
+/**
+ * ElevenLabs Speech-to-Text Integration
+ */
+export async function transcribeAudio(audioBlob: Blob): Promise<string> {
+  if (!Config.voice.elevenLabsApiKey) {
+    throw new Error('ElevenLabs API key not configured');
+  }
+
+  try {
+    logger.debug('Starting audio transcription');
+
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.wav');
+    formData.append('model', 'whisper-1');
+
+    const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Config.voice.elevenLabsApiKey}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Transcription failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    logger.info('Audio transcription completed', { 
+      textLength: data.text?.length || 0 
+    });
+
+    return data.text || '';
+  } catch (error) {
+    logger.error('Audio transcription failed', error);
+    throw new Error('Failed to transcribe audio. Please try typing your message instead.');
+  }
+}
+
+/**
+ * Fallback response generator for when TxAgent is unavailable
+ */
+export function generateFallbackResponse(query: string): TxAgentResponse {
+  const sessionId = generateSessionId();
+  
+  return {
+    response: {
+      text: "I'm currently experiencing technical difficulties connecting to the medical consultation service. While I work to resolve this, please remember that if you're experiencing a medical emergency, contact emergency services immediately. For non-urgent concerns, consider consulting with your healthcare provider. You can continue to log your symptoms in the app for tracking purposes.",
+      confidence_score: 0.5,
+    },
+    safety: {
+      emergency_detected: detectEmergencyKeywords(query),
+      disclaimer: "This is an automated fallback response. For medical emergencies, call emergency services immediately. This app is not a substitute for professional medical advice.",
+      urgent_care_recommended: detectEmergencyKeywords(query),
+    },
+    processing_time_ms: 100,
+    session_id: sessionId,
+  };
 }
