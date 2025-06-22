@@ -73,19 +73,34 @@ class SpeechService {
   async requestPermissions(): Promise<boolean> {
     try {
       if (Platform.OS === 'web') {
-        // Web permissions are handled by the browser
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        // Check if the browser supports the required APIs
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          logger.error('Web microphone API not supported');
+          return false;
+        }
+
+        // First, check current permission status without triggering a prompt
+        if (navigator.permissions && navigator.permissions.query) {
           try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            // Stop the stream immediately, we just needed to check permissions
-            stream.getTracks().forEach(track => track.stop());
-            return true;
+            const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+            
+            if (permissionStatus.state === 'granted') {
+              return true;
+            } else if (permissionStatus.state === 'denied') {
+              logger.warn('Web microphone permission previously denied');
+              return false;
+            }
+            // If state is 'prompt', we'll need to request permission when actually starting recording
+            return true; // Return true to indicate we can attempt to request permission later
           } catch (error) {
-            logger.error('Web microphone permission denied', error);
-            return false;
+            // Fallback if permissions.query is not supported
+            logger.debug('Permissions API not supported, will check on recording start');
+            return true;
           }
         }
-        return false;
+
+        // If permissions API is not available, assume we can request permission when needed
+        return true;
       }
 
       const Audio = await this.initializeAudio();
@@ -95,6 +110,21 @@ class SpeechService {
       return status === 'granted';
     } catch (error) {
       logger.error('Failed to request microphone permissions', error);
+      return false;
+    }
+  }
+
+  /**
+   * Request microphone permission with user interaction (for web)
+   */
+  private async requestWebPermissionWithPrompt(): Promise<boolean> {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Stop the stream immediately, we just needed to check permissions
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (error) {
+      logger.error('Web microphone permission denied by user', error);
       return false;
     }
   }
@@ -114,29 +144,42 @@ class SpeechService {
         throw new Error('Audio recording is not available in server environment');
       }
 
-      const Audio = await this.initializeAudio();
-      if (!Audio) {
-        throw new Error('Audio module not available');
-      }
+      if (Platform.OS === 'web') {
+        // For web, request permission with user interaction when actually starting recording
+        const hasPermission = await this.requestWebPermissionWithPrompt();
+        if (!hasPermission) {
+          throw new Error('Microphone permission not granted');
+        }
+      } else {
+        const Audio = await this.initializeAudio();
+        if (!Audio) {
+          throw new Error('Audio module not available');
+        }
 
-      // Request permissions first
-      const hasPermission = await this.requestPermissions();
-      if (!hasPermission) {
-        throw new Error('Microphone permission not granted');
-      }
+        // Request permissions first for native platforms
+        const hasPermission = await this.requestPermissions();
+        if (!hasPermission) {
+          throw new Error('Microphone permission not granted');
+        }
 
-      // Configure audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
+        // Configure audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      }
 
       // Set recording options based on quality
       const recordingOptions = this.getRecordingOptions(options.quality || 'high');
 
       // Create and start recording
+      const Audio = await this.initializeAudio();
+      if (!Audio) {
+        throw new Error('Audio module not available');
+      }
+
       const { recording } = await Audio.Recording.createAsync(recordingOptions);
       this.recording = recording;
       this.isRecording = true;
