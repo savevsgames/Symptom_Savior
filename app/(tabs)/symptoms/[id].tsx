@@ -20,6 +20,17 @@ export default function SymptomDetail() {
     }
   }, [id]);
 
+  // Reload symptom when screen comes into focus (after editing)
+  useEffect(() => {
+    const unsubscribe = router.addListener('focus', () => {
+      if (id && !loading) {
+        loadSymptom();
+      }
+    });
+
+    return unsubscribe;
+  }, [id, loading]);
+
   const loadSymptom = async () => {
     try {
       setLoading(true);
@@ -38,6 +49,14 @@ export default function SymptomDetail() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEdit = () => {
+    if (!symptom) return;
+    router.push({
+      pathname: '/edit-symptom',
+      params: { id: symptom.id }
+    });
   };
 
   const handleDelete = () => {
@@ -148,10 +167,7 @@ export default function SymptomDetail() {
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={styles.headerAction}
-            onPress={() => {
-              // TODO: Navigate to edit screen in future update
-              Alert.alert('Coming Soon', 'Edit functionality will be available in a future update.');
-            }}
+            onPress={handleEdit}
           >
             <Edit3 size={20} color={theme.colors.text.secondary} strokeWidth={2} />
           </TouchableOpacity>
@@ -256,9 +272,18 @@ export default function SymptomDetail() {
         {/* Actions */}
         <View style={styles.actionsContainer}>
           <BaseButton
+            title="Edit Symptom"
+            onPress={handleEdit}
+            variant="primary"
+            size="lg"
+            fullWidth
+            style={styles.actionButton}
+          />
+          
+          <BaseButton
             title="Log Similar Symptom"
             onPress={() => router.push('/add-symptom')}
-            variant="primary"
+            variant="outline"
             size="lg"
             fullWidth
             style={styles.actionButton}

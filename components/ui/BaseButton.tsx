@@ -42,6 +42,16 @@ export function BaseButton({
     textStyle,
   ];
 
+  const getLoadingColor = () => {
+    switch (variant) {
+      case 'primary':
+      case 'danger':
+        return theme.colors.text.inverse;
+      default:
+        return theme.colors.primary[500];
+    }
+  };
+
   return (
     <TouchableOpacity
       style={buttonStyles}
@@ -52,7 +62,7 @@ export function BaseButton({
       {loading ? (
         <ActivityIndicator 
           size="small" 
-          color={variant === 'primary' ? theme.colors.text.inverse : theme.colors.primary[500]} 
+          color={getLoadingColor()} 
         />
       ) : (
         <Text style={textStyles}>{title}</Text>

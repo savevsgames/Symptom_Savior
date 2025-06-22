@@ -23,3 +23,6 @@ export type { DoctorVisitCardProps } from './DoctorVisitCard';
 
 export { VoiceInput } from './VoiceInput';
 export type { VoiceInputProps } from './VoiceInput';
+
+export { VoiceRecordButton } from './VoiceRecordButton';
+export type { VoiceRecordButtonProps } from './VoiceRecordButton';

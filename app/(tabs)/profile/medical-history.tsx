@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Plus, X, Heart, Pill, TriangleAlert as AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, Plus, X, Heart, Pill, TriangleAlert as AlertTriangle, Calendar, User } from 'lucide-react-native';
 import { BaseButton, BaseTextInput, BaseCard } from '@/components/ui';
 import { useProfile } from '@/hooks/useProfile';
 import { theme } from '@/lib/theme';
@@ -26,6 +26,21 @@ export default function MedicalHistory() {
     deleteAllergy,
     loading 
   } = useProfile();
+
+  const commonConditions = [
+    'Diabetes', 'Hypertension', 'Asthma', 'Arthritis', 'Depression',
+    'Anxiety', 'High Cholesterol', 'Heart Disease', 'Migraine', 'GERD'
+  ];
+
+  const commonMedications = [
+    'Ibuprofen', 'Acetaminophen', 'Aspirin', 'Metformin', 'Lisinopril',
+    'Atorvastatin', 'Omeprazole', 'Sertraline', 'Metoprolol', 'Amlodipine'
+  ];
+
+  const commonAllergies = [
+    'Peanuts', 'Shellfish', 'Penicillin', 'Latex', 'Pollen',
+    'Dust Mites', 'Pet Dander', 'Eggs', 'Milk', 'Soy'
+  ];
 
   const handleAddCondition = async () => {
     if (!newCondition.trim()) return;
@@ -144,6 +159,20 @@ export default function MedicalHistory() {
     );
   };
 
+  const handleQuickAdd = (type: 'condition' | 'medication' | 'allergy', item: string) => {
+    switch (type) {
+      case 'condition':
+        setNewCondition(item);
+        break;
+      case 'medication':
+        setNewMedication(item);
+        break;
+      case 'allergy':
+        setNewAllergy(item);
+        break;
+    }
+  };
+
   if (!profile) {
     return (
       <SafeAreaView style={styles.container}>
@@ -181,11 +210,28 @@ export default function MedicalHistory() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Medical Conditions */}
         <BaseCard style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            <Heart size={16} color={theme.colors.text.primary} strokeWidth={2} />
-            {' '}Medical Conditions
-          </Text>
+          <View style={styles.sectionHeader}>
+            <Heart size={20} color={theme.colors.error[500]} strokeWidth={2} />
+            <Text style={styles.sectionTitle}>Medical Conditions</Text>
+          </View>
           
+          {/* Quick Add Buttons */}
+          <View style={styles.quickAddContainer}>
+            <Text style={styles.quickAddLabel}>Common conditions:</Text>
+            <View style={styles.quickAddGrid}>
+              {commonConditions.slice(0, 6).map((condition) => (
+                <TouchableOpacity
+                  key={condition}
+                  style={styles.quickAddChip}
+                  onPress={() => handleQuickAdd('condition', condition)}
+                >
+                  <Plus size={12} color={theme.colors.primary[600]} strokeWidth={2} />
+                  <Text style={styles.quickAddText}>{condition}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           <View style={styles.addItemContainer}>
             <BaseTextInput
               placeholder="Add a medical condition..."
@@ -207,7 +253,17 @@ export default function MedicalHistory() {
           <View style={styles.itemsList}>
             {conditions.map((condition) => (
               <View key={condition.id} style={styles.itemTag}>
-                <Text style={styles.itemText}>{condition.condition_name}</Text>
+                <View style={styles.itemContent}>
+                  <Text style={styles.itemText}>{condition.condition_name}</Text>
+                  {condition.diagnosed_on && (
+                    <View style={styles.itemMeta}>
+                      <Calendar size={12} color={theme.colors.text.tertiary} strokeWidth={2} />
+                      <Text style={styles.itemMetaText}>
+                        {new Date(condition.diagnosed_on).getFullYear()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 <TouchableOpacity 
                   onPress={() => handleDeleteCondition(condition.id, condition.condition_name)}
                   style={styles.deleteButton}
@@ -224,11 +280,28 @@ export default function MedicalHistory() {
 
         {/* Current Medications */}
         <BaseCard style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            <Pill size={16} color={theme.colors.text.primary} strokeWidth={2} />
-            {' '}Current Medications
-          </Text>
+          <View style={styles.sectionHeader}>
+            <Pill size={20} color={theme.colors.primary[500]} strokeWidth={2} />
+            <Text style={styles.sectionTitle}>Current Medications</Text>
+          </View>
           
+          {/* Quick Add Buttons */}
+          <View style={styles.quickAddContainer}>
+            <Text style={styles.quickAddLabel}>Common medications:</Text>
+            <View style={styles.quickAddGrid}>
+              {commonMedications.slice(0, 6).map((medication) => (
+                <TouchableOpacity
+                  key={medication}
+                  style={styles.quickAddChip}
+                  onPress={() => handleQuickAdd('medication', medication)}
+                >
+                  <Plus size={12} color={theme.colors.primary[600]} strokeWidth={2} />
+                  <Text style={styles.quickAddText}>{medication}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           <View style={styles.addItemContainer}>
             <BaseTextInput
               placeholder="Add a medication..."
@@ -249,13 +322,20 @@ export default function MedicalHistory() {
 
           <View style={styles.itemsList}>
             {medications.map((medication) => (
-              <View key={medication.id} style={styles.itemTag}>
-                <Text style={styles.itemText}>{medication.medication_name}</Text>
+              <View key={medication.id} style={[styles.itemTag, styles.medicationTag]}>
+                <View style={styles.itemContent}>
+                  <Text style={[styles.itemText, styles.medicationText]}>{medication.medication_name}</Text>
+                  {medication.dose && (
+                    <View style={styles.itemMeta}>
+                      <Text style={styles.itemMetaText}>{medication.dose}</Text>
+                    </View>
+                  )}
+                </View>
                 <TouchableOpacity 
                   onPress={() => handleDeleteMedication(medication.id, medication.medication_name)}
                   style={styles.deleteButton}
                 >
-                  <X size={16} color={theme.colors.text.secondary} strokeWidth={2} />
+                  <X size={16} color={theme.colors.primary[600]} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -267,11 +347,28 @@ export default function MedicalHistory() {
 
         {/* Allergies */}
         <BaseCard style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            <AlertTriangle size={16} color={theme.colors.text.primary} strokeWidth={2} />
-            {' '}Allergies
-          </Text>
+          <View style={styles.sectionHeader}>
+            <AlertTriangle size={20} color={theme.colors.warning[500]} strokeWidth={2} />
+            <Text style={styles.sectionTitle}>Allergies</Text>
+          </View>
           
+          {/* Quick Add Buttons */}
+          <View style={styles.quickAddContainer}>
+            <Text style={styles.quickAddLabel}>Common allergies:</Text>
+            <View style={styles.quickAddGrid}>
+              {commonAllergies.slice(0, 6).map((allergy) => (
+                <TouchableOpacity
+                  key={allergy}
+                  style={styles.quickAddChip}
+                  onPress={() => handleQuickAdd('allergy', allergy)}
+                >
+                  <Plus size={12} color={theme.colors.primary[600]} strokeWidth={2} />
+                  <Text style={styles.quickAddText}>{allergy}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
           <View style={styles.addItemContainer}>
             <BaseTextInput
               placeholder="Add an allergy..."
@@ -293,12 +390,19 @@ export default function MedicalHistory() {
           <View style={styles.itemsList}>
             {allergies.map((allergy) => (
               <View key={allergy.id} style={[styles.itemTag, styles.allergyTag]}>
-                <Text style={[styles.itemText, styles.allergyText]}>{allergy.allergen}</Text>
+                <View style={styles.itemContent}>
+                  <Text style={[styles.itemText, styles.allergyText]}>{allergy.allergen}</Text>
+                  {allergy.reaction && (
+                    <View style={styles.itemMeta}>
+                      <Text style={styles.itemMetaText}>{allergy.reaction}</Text>
+                    </View>
+                  )}
+                </View>
                 <TouchableOpacity 
                   onPress={() => handleDeleteAllergy(allergy.id, allergy.allergen)}
                   style={styles.deleteButton}
                 >
-                  <X size={16} color={theme.colors.error[600]} strokeWidth={2} />
+                  <X size={16} color={theme.colors.warning[600]} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -308,12 +412,36 @@ export default function MedicalHistory() {
           </View>
         </BaseCard>
 
+        {/* Medical Summary */}
+        {(conditions.length > 0 || medications.length > 0 || allergies.length > 0) && (
+          <BaseCard style={[styles.section, styles.summaryCard]}>
+            <Text style={styles.summaryTitle}>Medical History Summary</Text>
+            <View style={styles.summaryStats}>
+              <View style={styles.summaryStatItem}>
+                <Heart size={16} color={theme.colors.error[500]} strokeWidth={2} />
+                <Text style={styles.summaryStatNumber}>{conditions.length}</Text>
+                <Text style={styles.summaryStatLabel}>Conditions</Text>
+              </View>
+              <View style={styles.summaryStatItem}>
+                <Pill size={16} color={theme.colors.primary[500]} strokeWidth={2} />
+                <Text style={styles.summaryStatNumber}>{medications.length}</Text>
+                <Text style={styles.summaryStatLabel}>Medications</Text>
+              </View>
+              <View style={styles.summaryStatItem}>
+                <AlertTriangle size={16} color={theme.colors.warning[500]} strokeWidth={2} />
+                <Text style={styles.summaryStatNumber}>{allergies.length}</Text>
+                <Text style={styles.summaryStatLabel}>Allergies</Text>
+              </View>
+            </View>
+          </BaseCard>
+        )}
+
         {/* Important Note */}
         <BaseCard style={[styles.section, styles.noteCard]}>
           <Text style={styles.noteTitle}>Important Note</Text>
           <Text style={styles.noteText}>
             This information helps provide better health guidance and is especially important for emergency situations. 
-            Always consult with your healthcare provider for medical decisions.
+            Always consult with your healthcare provider for medical decisions and keep this information up to date.
           </Text>
         </BaseCard>
       </ScrollView>
@@ -362,13 +490,52 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing['2xl'],
   },
   
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: theme.spacing.lg,
+  },
+  
   sectionTitle: {
     fontFamily: theme.typography.fontFamily.semiBold,
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.primary,
+    marginLeft: theme.spacing.sm,
+  },
+  
+  quickAddContainer: {
     marginBottom: theme.spacing.lg,
+  },
+  
+  quickAddLabel: {
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.sm,
+  },
+  
+  quickAddGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+  },
+  
+  quickAddChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: theme.colors.primary[50],
+    borderWidth: 1,
+    borderColor: theme.colors.primary[200],
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.full,
+  },
+  
+  quickAddText: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.primary[600],
+    marginLeft: theme.spacing.xs,
   },
   
   addItemContainer: {
@@ -389,36 +556,60 @@ const styles = StyleSheet.create({
   },
   
   itemsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: theme.spacing.sm,
   },
   
   itemTag: {
-    backgroundColor: theme.colors.primary[50],
+    backgroundColor: theme.colors.error[50],
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.full,
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.md,
     borderWidth: 1,
+    borderColor: theme.colors.error[200],
+  },
+  
+  medicationTag: {
+    backgroundColor: theme.colors.primary[50],
     borderColor: theme.colors.primary[200],
   },
   
   allergyTag: {
-    backgroundColor: theme.colors.error[50],
-    borderColor: theme.colors.error[200],
+    backgroundColor: theme.colors.warning[50],
+    borderColor: theme.colors.warning[200],
+  },
+  
+  itemContent: {
+    flex: 1,
   },
   
   itemText: {
-    fontFamily: theme.typography.fontFamily.regular,
+    fontFamily: theme.typography.fontFamily.medium,
     fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.error[700],
+  },
+  
+  medicationText: {
     color: theme.colors.primary[700],
-    marginRight: theme.spacing.xs,
   },
   
   allergyText: {
-    color: theme.colors.error[700],
+    color: theme.colors.warning[700],
+  },
+  
+  itemMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: theme.spacing.xs,
+  },
+  
+  itemMetaText: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+    marginLeft: theme.spacing.xs,
   },
   
   deleteButton: {
@@ -430,6 +621,44 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     color: theme.colors.text.tertiary,
     fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: theme.spacing.lg,
+  },
+  
+  summaryCard: {
+    backgroundColor: theme.colors.background.primary,
+    borderWidth: 1,
+    borderColor: theme.colors.border.medium,
+  },
+  
+  summaryTitle: {
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.lg,
+    textAlign: 'center',
+  },
+  
+  summaryStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  
+  summaryStatItem: {
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  
+  summaryStatNumber: {
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.fontSize.xl,
+    color: theme.colors.text.primary,
+  },
+  
+  summaryStatLabel: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.secondary,
   },
   
   noteCard: {

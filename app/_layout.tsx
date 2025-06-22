@@ -12,6 +12,11 @@ import {
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from '@/contexts/AuthContext';
 
+// Disable SSR for client-side only features
+export const unstable_settings = {
+  initialRouteName: 'index',
+};
+
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {

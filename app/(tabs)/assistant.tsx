@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Send, Bot, User, Heart, TriangleAlert as AlertTriangle, Mic, MicOff, Volume2, VolumeX } from 'lucide-react-native';
+import { Send, Bot, User, Heart, TriangleAlert as AlertTriangle, Volume2, VolumeX } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import { useProfile } from '@/hooks/useProfile';
 import { useSymptoms } from '@/hooks/useSymptoms';
-import { callTxAgent, logConsultation, detectEmergency, generateFallbackResponse, transcribeAudio, type TxAgentRequest, type TxAgentResponse } from '@/lib/api';
+import { callTxAgent, logConsultation, detectEmergency, generateFallbackResponse, type TxAgentRequest, type TxAgentResponse } from '@/lib/api';
+import { VoiceRecordButton } from '@/components/ui/VoiceRecordButton';
+import { type TranscriptionResult } from '@/lib/speech';
+import { ttsService } from '@/lib/tts';
 import { Config } from '@/lib/config';
 import { logger } from '@/utils/logger';
 
@@ -35,8 +38,6 @@ export default function Assistant() {
   ]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [contextInitialized, setContextInitialized] = useState(false);
   const [sessionId, setSessionId] = useState<string>(`session_${Date.now()}`);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -60,9 +61,22 @@ export default function Assistant() {
   const buildUserContext = () => {
     if (!profile) return null;
 
+    // Calculate age from date of birth
+    const calculateAge = (dateOfBirth: string) => {
+      const today = new Date();
+      const birthDate = new Date(dateOfBirth);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      return age;
+    };
+
     const context = {
       user_profile: {
-        age: profile.date_of_birth ? Math.floor((new Date().getTime() - new Date(profile.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : null,
+        full_name: profile.full_name,
+        age: profile.date_of_birth ? calculateAge(profile.date_of_birth) : null,
         gender: profile.gender,
         blood_group: profile.blood_group,
         height_cm: profile.height_cm,
@@ -105,27 +119,27 @@ export default function Assistant() {
     return context;
   };
 
-  const sendMessage = async () => {
-    if (!inputText.trim()) return;
+  const sendMessage = async (messageText?: string) => {
+    const textToSend = messageText || inputText.trim();
+    if (!textToSend) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText.trim(),
+      text: textToSend,
       isBot: false,
       timestamp: new Date(),
     };
 
     setMessages(prev => [...prev, userMessage]);
-    const originalInput = inputText.trim();
     setInputText('');
     setIsTyping(true);
 
     try {
       // Build context for personalized responses
       const shouldUseContext = profile && (!contextInitialized || 
-        originalInput.toLowerCase().includes('my') || 
-        originalInput.toLowerCase().includes('personal') ||
-        originalInput.toLowerCase().includes('history'));
+        textToSend.toLowerCase().includes('my') || 
+        textToSend.toLowerCase().includes('personal') ||
+        textToSend.toLowerCase().includes('history'));
 
       const context = shouldUseContext ? buildUserContext() : undefined;
 
@@ -135,7 +149,7 @@ export default function Assistant() {
 
       // Prepare TxAgent request
       const request: TxAgentRequest = {
-        query: originalInput,
+        query: textToSend,
         context,
         include_voice: Config.features.enableVoice,
         include_video: Config.features.enableVideoAvatar,
@@ -154,7 +168,7 @@ export default function Assistant() {
         logger.error('TxAgent call failed, using fallback', error);
         
         // Use fallback response if TxAgent is unavailable
-        response = generateFallbackResponse(originalInput);
+        response = generateFallbackResponse(textToSend);
         
         // Show user-friendly error message
         Alert.alert(
@@ -202,9 +216,15 @@ export default function Assistant() {
         }, 1000);
       }
 
-      // Auto-play voice response if available
-      if (response.media?.voice_audio_url && Config.features.enableVoice) {
-        playAudioResponse(response.media.voice_audio_url, botMessage.id);
+      // Generate and play TTS response if voice is enabled
+      if (Config.features.enableVoice && Config.voice.elevenLabsApiKey) {
+        // Use provided voice URL or generate TTS
+        if (response.media?.voice_audio_url) {
+          playAudioResponse(response.media.voice_audio_url, botMessage.id);
+        } else {
+          // Generate TTS for the response
+          generateTTSResponse(response.response.text, botMessage.id);
+        }
       }
 
     } catch (error) {
@@ -215,7 +235,7 @@ export default function Assistant() {
         text: "I'm sorry, I'm having trouble processing your request right now. Please try again in a moment. If you're experiencing a medical emergency, please contact emergency services immediately.",
         isBot: true,
         timestamp: new Date(),
-        emergencyDetected: detectEmergency(originalInput).isEmergency,
+        emergencyDetected: detectEmergency(textToSend).isEmergency,
       };
 
       setMessages(prev => [...prev, errorMessage]);
@@ -224,76 +244,58 @@ export default function Assistant() {
     }
   };
 
-  const startRecording = async () => {
-    if (!Config.features.enableVoice) {
-      Alert.alert('Voice Disabled', 'Voice features are currently disabled.');
-      return;
-    }
-
+  const generateTTSResponse = async (text: string, messageId: string) => {
     try {
-      logger.debug('Starting audio recording');
-      
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant microphone permission to use voice input.');
+      logger.debug('Generating TTS for AI response', { messageId });
+      setPlayingAudio(messageId);
+
+      // Clean text for TTS (remove markdown, excessive punctuation)
+      const cleanText = text
+        .replace(/\*\*(.*?)\*\*/g, '$1') // Remove bold markdown
+        .replace(/\*(.*?)\*/g, '$1')     // Remove italic markdown
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove links, keep text
+        .replace(/\n+/g, ' ')            // Replace newlines with spaces
+        .replace(/\s+/g, ' ')            // Normalize whitespace
+        .trim();
+
+      const result = await ttsService.generateSpeech(cleanText, {
+        voice_id: 'EXAVITQu4vr4xnSDxMaL', // Bella - professional female voice
+        model_id: 'eleven_turbo_v2',       // Fast, cost-effective
+        voice_settings: {
+          stability: 0.6,
+          similarity_boost: 0.8,
+          style: 0.2,
+          use_speaker_boost: true,
+        },
+      });
+
+      if (result.error) {
+        logger.error('TTS generation failed', result.error);
+        setPlayingAudio(null);
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      setRecording(recording);
-      setIsRecording(true);
-      logger.info('Recording started');
+      if (result.audioUrl) {
+        await ttsService.playAudio(result.audioUrl);
+        logger.info('TTS playback completed');
+      }
     } catch (error) {
-      logger.error('Failed to start recording', error);
-      Alert.alert('Recording Error', 'Failed to start voice recording. Please try again.');
+      logger.error('TTS generation/playback failed', error);
+    } finally {
+      setPlayingAudio(null);
     }
   };
 
-  const stopRecording = async () => {
-    if (!recording) return;
-
-    try {
-      logger.debug('Stopping audio recording');
-      setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      
-      const uri = recording.getURI();
-      setRecording(null);
-
-      if (uri) {
-        // Convert recording to blob for transcription
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        
-        // Transcribe audio
-        setIsTyping(true);
-        try {
-          const transcription = await transcribeAudio(blob);
-          if (transcription.trim()) {
-            setInputText(transcription);
-            logger.info('Audio transcribed successfully', { length: transcription.length });
-          } else {
-            Alert.alert('No Speech Detected', 'Please try speaking more clearly or use text input.');
-          }
-        } catch (error) {
-          logger.error('Transcription failed', error);
-          Alert.alert('Transcription Error', 'Failed to convert speech to text. Please try typing your message.');
-        } finally {
-          setIsTyping(false);
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to stop recording', error);
-      Alert.alert('Recording Error', 'Failed to process voice recording.');
+  const handleVoiceTranscription = (result: TranscriptionResult) => {
+    if (result.text.trim()) {
+      logger.info('Voice transcription received', { text: result.text });
+      sendMessage(result.text);
     }
+  };
+
+  const handleVoiceError = (error: string) => {
+    logger.error('Voice input error', error);
+    Alert.alert('Voice Input Error', error);
   };
 
   const playAudioResponse = async (audioUrl: string, messageId: string) => {
@@ -320,8 +322,7 @@ export default function Assistant() {
 
   const stopAudioPlayback = async () => {
     try {
-      await Audio.setIsEnabledAsync(false);
-      await Audio.setIsEnabledAsync(true);
+      await ttsService.stopAudio();
       setPlayingAudio(null);
     } catch (error) {
       logger.error('Failed to stop audio playback', error);
@@ -329,7 +330,7 @@ export default function Assistant() {
   };
 
   const sendQuickPrompt = (prompt: string) => {
-    setInputText(prompt);
+    sendMessage(prompt);
   };
 
   const formatTime = (date: Date) => {
@@ -350,7 +351,7 @@ export default function Assistant() {
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <Image 
-              source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+              source={{ uri: 'https://images.pexels.com/photos/4386467/pexels-photo-4386467.jpeg' }}
               style={styles.characterAvatar}
               resizeMode="contain"
             />
@@ -401,7 +402,7 @@ export default function Assistant() {
                 ]}>
                   {message.isBot ? (
                     <Image 
-                      source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+                      source={{ uri: 'https://images.pexels.com/photos/4386467/pexels-photo-4386467.jpeg' }}
                       style={styles.messageAvatar}
                       resizeMode="contain"
                     />
@@ -426,14 +427,14 @@ export default function Assistant() {
                 </Text>
 
                 {/* Voice Playback Button */}
-                {message.voiceUrl && Config.features.enableVoice && (
+                {message.isBot && Config.features.enableVoice && (
                   <TouchableOpacity
                     style={styles.voiceButton}
                     onPress={() => {
                       if (playingAudio === message.id) {
                         stopAudioPlayback();
                       } else {
-                        playAudioResponse(message.voiceUrl!, message.id);
+                        generateTTSResponse(message.text, message.id);
                       }
                     }}
                   >
@@ -475,7 +476,7 @@ export default function Assistant() {
               <View style={styles.messageHeader}>
                 <View style={styles.botAvatar}>
                   <Image 
-                    source={require('@/assets/images/symptom_savior_concept_art_04_guardianagent.png')}
+                    source={{ uri: 'https://images.pexels.com/photos/4386467/pexels-photo-4386467.jpeg' }}
                     style={styles.messageAvatar}
                     resizeMode="contain"
                   />
@@ -517,26 +518,24 @@ export default function Assistant() {
             placeholderTextColor="#94A3B8"
             multiline
             maxLength={500}
+            onSubmitEditing={() => sendMessage()}
           />
           
           {/* Voice Input Button */}
           {Config.features.enableVoice && (
-            <TouchableOpacity
-              style={[styles.voiceInputButton, isRecording && styles.voiceInputButtonRecording]}
-              onPress={isRecording ? stopRecording : startRecording}
+            <VoiceRecordButton
+              onTranscription={handleVoiceTranscription}
+              onError={handleVoiceError}
               disabled={isTyping}
-            >
-              {isRecording ? (
-                <MicOff size={20} color="#FFFFFF" strokeWidth={2} />
-              ) : (
-                <Mic size={20} color="#0066CC" strokeWidth={2} />
-              )}
-            </TouchableOpacity>
+              maxDuration={30000} // 30 seconds
+              size="md"
+              style={styles.voiceInputButton}
+            />
           )}
           
           <TouchableOpacity 
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-            onPress={sendMessage}
+            onPress={() => sendMessage()}
             disabled={!inputText.trim() || isTyping}
           >
             <Send size={20} color={inputText.trim() ? "#FFFFFF" : "#94A3B8"} strokeWidth={2} />
@@ -798,16 +797,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   voiceInputButton: {
-    backgroundColor: '#F1F5F9',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 8,
-  },
-  voiceInputButtonRecording: {
-    backgroundColor: '#DC2626',
   },
   sendButton: {
     backgroundColor: '#0066CC',
