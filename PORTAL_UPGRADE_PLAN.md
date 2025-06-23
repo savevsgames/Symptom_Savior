@@ -1,481 +1,465 @@
-# Portal Upgrade Plan - Backend Integration & API Consolidation
+# PORTAL_UPGRADE_PLAN.md (Revised - Phase 1 Focus)
 
 ## Overview
+This document provides a comprehensive integration plan for adding TxAgent Medical RAG capabilities to the existing Doctor's Portal backend. The portal will serve as an intermediary between the mobile user application (SymptomSavior) and the TxAgent container, orchestrating medical consultations, document processing, and multimedia generation.
 
-This plan outlines the integration of the Symptom Savior mobile app with the existing backend doctor's portal, consolidating APIs and ensuring seamless data flow between patient and provider interfaces.
+## System Architecture
 
-## Current State Analysis
-
-### Existing Backend Infrastructure
-- **Doctor's Portal**: Node.js backend with established routes and TxAgent integration
-- **Document Processing**: Existing `/upload` endpoint in `backend/routes/documents.js`
-- **Database**: Shared Supabase instance with comprehensive health tracking schema
-- **AI Integration**: TxAgent medical RAG system already integrated in doctor's portal
-
-### Mobile App Current State
-- **Frontend**: React Native (Expo) with TypeScript
-- **Database**: Direct Supabase client integration
-- **AI**: Placeholder for TxAgent integration
-- **Authentication**: Supabase Auth with JWT
-
-## Integration Strategy
-
-### Phase 1: API Endpoint Consolidation
-
-#### 1.1 Medical Consultation Endpoint
-**Endpoint**: `POST /api/medical-consultation`
-**Purpose**: Unified AI consultation handling for both mobile app and doctor portal
-
-**Request Body**:
-```typescript
-{
-  query: string;
-  context?: {
-    user_profile?: UserProfile;
-    recent_symptoms?: Symptom[];
-    medical_conditions?: Condition[];
-    current_medications?: Medication[];
-    allergies?: Allergy[];
-    recent_visits?: DoctorVisit[];
-  };
-  include_voice?: boolean;
-  include_video?: boolean;
-  session_id?: string;
-  consultation_type?: 'patient_query' | 'doctor_analysis';
-}
+```
+Mobile App (SymptomSavior)
+    ↓ JWT + Request
+Doctor's Portal Backend (Node.js/Express)
+    ↓ JWT Forwarding + Orchestration
+┌─────────────────┬─────────────────┬─────────────────┐
+│   TxAgent       │   ElevenLabs    │    TavusAI      │
+│  Container      │    (Voice)      │   (Video)       │
+└─────────────────┴─────────────────┴─────────────────┘
+                    ↓
+                Supabase Database
+                (RLS Protected)
 ```
 
-**Response**:
-```typescript
-{
-  response: {
-    text: string;
-    sources?: Source[];
-    confidence_score?: number;
-  };
-  safety: {
-    emergency_detected: boolean;
-    disclaimer: string;
-    urgent_care_recommended?: boolean;
-  };
-  media?: {
-    voice_audio_url?: string;
-    video_url?: string;
-  };
-  recommendations?: {
-    suggested_action?: string;
-    follow_up_questions?: string[];
-  };
-  processing_time_ms: number;
-  session_id: string;
-}
-```
+## PHASE 1: CORE FUNCTIONALITY IMPLEMENTATION
 
-#### 1.2 Document Processing Endpoint Enhancement
-**Current**: `/upload` endpoint in `backend/routes/documents.js`
-**Enhancement**: Extend existing endpoint to support mobile app uploads
+### Priority 1: Database Schema Updates
 
-**Updated Request Handling**:
-```typescript
-// Enhanced existing /upload endpoint
-app.post('/upload', upload.single('file'), async (req, res) => {
-  try {
-    const { file } = req;
-    const { user_id, source = 'mobile_app' } = req.body;
-    
-    // Existing file upload logic
-    const uploadResult = await uploadToSupabaseStorage(file);
-    
-    // Enhanced: Support different processing modes
-    const processingMode = req.body.processing_mode || 'immediate';
-    
-    if (processingMode === 'immediate') {
-      // Existing immediate processing
-      await triggerTxAgentProcessing(uploadResult.path);
-    } else if (processingMode === 'queued') {
-      // New: Queue for batch processing
-      await queueDocumentProcessing(uploadResult.path, user_id);
-    }
-    
-    res.json({
-      document_id: uploadResult.id,
-      status: processingMode === 'immediate' ? 'processing' : 'queued',
-      file_path: uploadResult.path
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-```
-
-#### 1.3 Voice Processing Endpoints
-**New Endpoints**: Secure voice processing through backend
-
-**POST /api/voice/transcribe**:
-```typescript
-// Request: multipart/form-data with audio file
-// Response: { text: string, confidence?: number, duration?: number }
-
-app.post('/api/voice/transcribe', upload.single('audio'), async (req, res) => {
-  try {
-    const { file } = req;
-    const userId = req.user.id; // From JWT
-    
-    // Rate limiting check
-    if (!checkRateLimit(userId, 'transcription')) {
-      return res.status(429).json({ error: 'Rate limit exceeded' });
-    }
-    
-    // Forward to ElevenLabs with server-side API key
-    const transcription = await elevenLabsTranscribe(file);
-    
-    res.json({
-      text: transcription.text,
-      confidence: transcription.confidence,
-      duration: transcription.duration
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Transcription failed' });
-  }
-});
-```
-
-**POST /api/voice/tts**:
-```typescript
-// Request: { text: string, voice_id?: string, voice_settings?: object }
-// Response: Audio blob
-
-app.post('/api/voice/tts', async (req, res) => {
-  try {
-    const { text, voice_id, voice_settings } = req.body;
-    const userId = req.user.id;
-    
-    // Rate limiting and text length validation
-    if (!checkRateLimit(userId, 'tts') || text.length > 2000) {
-      return res.status(429).json({ error: 'Request limit exceeded' });
-    }
-    
-    // Generate speech using ElevenLabs
-    const audioBuffer = await elevenLabsGenerate(text, voice_id, voice_settings);
-    
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Content-Length': audioBuffer.length
-    });
-    res.send(audioBuffer);
-  } catch (error) {
-    res.status(500).json({ error: 'TTS generation failed' });
-  }
-});
-```
-
-### Phase 2: Database Schema Enhancements
-
-#### 2.1 User Medical Profiles Table Updates
-**Issue**: Potential overlap between proposed TEXT[] fields and existing detailed tables
-
-**Resolution**: Use existing detailed tables as primary source, add summary fields for quick access
-
-**Enhanced Schema**:
-```sql
--- Keep existing detailed tables as primary source
--- Add computed summary fields to user_medical_profiles for quick access
-
-ALTER TABLE user_medical_profiles 
-ADD COLUMN conditions_summary TEXT GENERATED ALWAYS AS (
-  (SELECT string_agg(condition_name, ', ') 
-   FROM profile_conditions 
-   WHERE profile_id = user_medical_profiles.id 
-   AND resolved_on IS NULL)
-) STORED;
-
-ALTER TABLE user_medical_profiles 
-ADD COLUMN medications_summary TEXT GENERATED ALWAYS AS (
-  (SELECT string_agg(medication_name || COALESCE(' (' || dose || ')', ''), ', ') 
-   FROM profile_medications 
-   WHERE profile_id = user_medical_profiles.id 
-   AND stopped_on IS NULL)
-) STORED;
-
-ALTER TABLE user_medical_profiles 
-ADD COLUMN allergies_summary TEXT GENERATED ALWAYS AS (
-  (SELECT string_agg(allergen, ', ') 
-   FROM profile_allergies 
-   WHERE profile_id = user_medical_profiles.id)
-) STORED;
-```
-
-#### 2.2 Medical Consultations Table Enhancement
-**Issue**: session_id type consistency
-
-**Resolution**: Ensure UUID consistency for session linking
+**New Migration Required**: `add_medical_consultation_tables.sql`
 
 ```sql
--- Update medical_consultations to use UUID for session_id
-ALTER TABLE medical_consultations 
-ALTER COLUMN session_id TYPE UUID USING session_id::UUID;
-
--- Add foreign key relationship to agents table
-ALTER TABLE medical_consultations 
-ADD CONSTRAINT fk_consultation_agent 
-FOREIGN KEY (session_id) REFERENCES agents(id) ON DELETE SET NULL;
-
--- Add consultation source tracking
-ALTER TABLE medical_consultations 
-ADD COLUMN consultation_source VARCHAR(20) DEFAULT 'mobile_app' 
-CHECK (consultation_source IN ('mobile_app', 'doctor_portal', 'api'));
-
--- Add indexes for performance
-CREATE INDEX idx_consultations_session_id ON medical_consultations(session_id);
-CREATE INDEX idx_consultations_source ON medical_consultations(consultation_source);
-```
-
-### Phase 3: Mobile App Backend Integration
-
-#### 3.1 API Client Configuration
-**Update mobile app to use backend endpoints instead of direct integrations**
-
-```typescript
-// lib/config.ts - Updated configuration
-export const Config = {
-  api: {
-    baseUrl: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
-    timeout: 30000,
-  },
-  features: {
-    enableVoice: parseBoolean(process.env.EXPO_PUBLIC_ENABLE_VOICE),
-    enableEmergencyDetection: parseBoolean(process.env.EXPO_PUBLIC_ENABLE_EMERGENCY_DETECTION),
-    enableVideoAvatar: parseBoolean(process.env.EXPO_PUBLIC_ENABLE_VIDEO_AVATAR),
-  }
-};
-```
-
-#### 3.2 Secure API Integration
-**Remove client-side API keys, use backend proxy**
-
-```typescript
-// lib/api.ts - Updated to use backend endpoints
-export async function callMedicalConsultation(request: ConsultationRequest): Promise<ConsultationResponse> {
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError || !session) {
-    throw new Error('User not authenticated');
-  }
-
-  const response = await fetch(`${Config.api.baseUrl}/api/medical-consultation`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify(request),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Consultation failed: ${response.statusText}`);
-  }
-
-  return response.json();
-}
-
-// Voice processing through backend
-export async function transcribeAudio(audioBlob: Blob): Promise<TranscriptionResult> {
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  const formData = new FormData();
-  formData.append('audio', audioBlob, 'recording.wav');
-
-  const response = await fetch(`${Config.api.baseUrl}/api/voice/transcribe`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${session.access_token}`,
-    },
-    body: formData,
-  });
-
-  return response.json();
-}
-```
-
-### Phase 4: Security & Performance Enhancements
-
-#### 4.1 Rate Limiting Implementation
-```typescript
-// backend/middleware/rateLimiter.js
-const rateLimit = require('express-rate-limit');
-const RedisStore = require('rate-limit-redis');
-
-const createRateLimiter = (windowMs, max, keyGenerator) => {
-  return rateLimit({
-    store: new RedisStore({
-      client: redisClient,
-    }),
-    windowMs,
-    max,
-    keyGenerator,
-    message: { error: 'Too many requests, please try again later' },
-  });
-};
-
-// Different limits for different endpoints
-const consultationLimiter = createRateLimiter(
-  15 * 60 * 1000, // 15 minutes
-  10, // 10 requests per window
-  (req) => `consultation:${req.user.id}`
+-- Medical consultations log (PHASE 1 - CORE TABLE)
+CREATE TABLE IF NOT EXISTS public.medical_consultations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL, -- Agent session identifier for tracking
+  query TEXT NOT NULL,
+  response TEXT NOT NULL,
+  sources JSONB DEFAULT '[]'::jsonb,
+  voice_audio_url TEXT,
+  video_url TEXT,
+  consultation_type TEXT DEFAULT 'symptom_inquiry',
+  processing_time INTEGER,
+  emergency_detected BOOLEAN DEFAULT FALSE,
+  context_used JSONB DEFAULT '{}'::jsonb,
+  confidence_score FLOAT,
+  recommendations JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-const voiceLimiter = createRateLimiter(
-  60 * 1000, // 1 minute
-  5, // 5 requests per minute
-  (req) => `voice:${req.user.id}`
-);
+-- Enable RLS
+ALTER TABLE public.medical_consultations ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policy
+CREATE POLICY "Users can insert their own consultations"
+    ON public.medical_consultations FOR INSERT TO authenticated
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can view their own consultations"
+    ON public.medical_consultations FOR SELECT TO authenticated
+    USING (auth.uid() = user_id);
+
+-- Indexes for performance
+CREATE INDEX medical_consultations_user_id_idx ON public.medical_consultations (user_id);
+CREATE INDEX medical_consultations_created_at_idx ON public.medical_consultations (created_at DESC);
+CREATE INDEX medical_consultations_session_id_idx ON public.medical_consultations (session_id);
 ```
 
-#### 4.2 Caching Strategy
-```typescript
-// backend/middleware/cache.js
-const NodeCache = require('node-cache');
-const cache = new NodeCache({ stdTTL: 300 }); // 5 minute default
+### Priority 2: Environment Variables Setup
 
-const cacheMiddleware = (duration = 300) => {
-  return (req, res, next) => {
-    const key = `${req.method}:${req.originalUrl}:${req.user.id}`;
-    const cached = cache.get(key);
-    
-    if (cached) {
-      return res.json(cached);
-    }
-    
-    res.sendResponse = res.json;
-    res.json = (body) => {
-      cache.set(key, body, duration);
-      res.sendResponse(body);
-    };
-    
-    next();
-  };
-};
-```
+**Add to backend `.env`**:
 
-### Phase 5: Deployment & Monitoring
-
-#### 5.1 Environment Configuration
 ```bash
-# Backend environment variables
-NODE_ENV=production
-DATABASE_URL=postgresql://...
-SUPABASE_URL=https://...
-SUPABASE_SERVICE_ROLE_KEY=...
-ELEVENLABS_API_KEY=...
-TAVUS_API_KEY=...
-REDIS_URL=redis://...
+# Phase 1 - Core TxAgent Integration
+TXAGENT_CONTAINER_URL=https://your-txagent-url.proxy.runpod.net
+TXAGENT_TIMEOUT=30000
 
-# Rate limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=10
+# Phase 1 - Basic Safety Features
+ENABLE_EMERGENCY_DETECTION=true
+MEDICAL_DISCLAIMER_REQUIRED=true
 
-# Security
-JWT_SECRET=...
-CORS_ORIGIN=https://symptomsavior.com
+# Phase 1 - Logging Level
+LOG_LEVEL=info
 ```
 
-#### 5.2 Health Checks & Monitoring
-```typescript
-// backend/routes/health.js
-app.get('/health', async (req, res) => {
-  const checks = {
-    database: await checkDatabase(),
-    redis: await checkRedis(),
-    supabase: await checkSupabase(),
-    elevenlabs: await checkElevenLabs(),
-    txagent: await checkTxAgent(),
+### Priority 3: Core Medical Consultation Endpoint
+
+**File**: `backend/routes/medicalConsultation.js` (NEW FILE)
+
+**Route**: `POST /api/medical-consultation`
+
+**Phase 1 Implementation** (Basic functionality without voice/video):
+
+```javascript
+import express from 'express';
+import { verifyToken } from '../middleware/auth.js';
+import { errorLogger } from '../agent_utils/shared/logger.js';
+import { AgentService } from '../agent_utils/core/agentService.js';
+
+export function createMedicalConsultationRouter(supabaseClient) {
+  const router = express.Router();
+  router.use(verifyToken);
+  
+  const agentService = new AgentService(supabaseClient);
+
+  // Emergency keywords for Phase 1
+  const emergencyKeywords = [
+    'chest pain', 'difficulty breathing', 'severe bleeding', 'unconscious',
+    'heart attack', 'stroke', 'seizure', 'severe allergic reaction',
+    'suicidal thoughts', 'overdose', 'can\'t breathe', 'choking'
+  ];
+
+  const detectEmergency = (text) => {
+    const hasKeywords = emergencyKeywords.some(keyword =>
+      text.toLowerCase().includes(keyword)
+    );
+    return {
+      isEmergency: hasKeywords,
+      confidence: hasKeywords ? 'high' : 'low',
+      detectedKeywords: emergencyKeywords.filter(keyword =>
+        text.toLowerCase().includes(keyword)
+      )
+    };
   };
-  
-  const allHealthy = Object.values(checks).every(check => check.status === 'healthy');
-  
-  res.status(allHealthy ? 200 : 503).json({
-    status: allHealthy ? 'healthy' : 'unhealthy',
-    timestamp: new Date().toISOString(),
-    checks,
+
+  router.post('/medical-consultation', async (req, res) => {
+    const startTime = Date.now();
+    let userId = req.userId;
+
+    try {
+      const { query, context, session_id } = req.body;
+
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({
+          error: 'Query is required and must be a string',
+          code: 'INVALID_QUERY'
+        });
+      }
+
+      errorLogger.info('Medical consultation request started', {
+        userId,
+        queryLength: query.length,
+        queryPreview: query.substring(0, 100),
+        hasContext: !!context,
+        sessionId: session_id,
+        component: 'MedicalConsultation'
+      });
+
+      // Phase 1: Emergency Detection
+      const emergencyCheck = detectEmergency(query);
+      
+      if (emergencyCheck.isEmergency) {
+        errorLogger.warn('Emergency detected in consultation', {
+          userId,
+          detectedKeywords: emergencyCheck.detectedKeywords,
+          query: query.substring(0, 200),
+          component: 'MedicalConsultation'
+        });
+
+        // Log emergency consultation
+        await supabaseClient
+          .from('medical_consultations')
+          .insert({
+            user_id: userId,
+            session_id: session_id || 'emergency-session',
+            query: query,
+            response: 'Emergency detected - immediate medical attention recommended',
+            emergency_detected: true,
+            consultation_type: 'emergency_detection',
+            processing_time: Date.now() - startTime,
+            context_used: { emergency_keywords: emergencyCheck.detectedKeywords }
+          });
+
+        return res.json({
+          response: {
+            text: 'I\'ve detected that you may be experiencing a medical emergency. Please contact emergency services immediately (call 911) or go to the nearest emergency room. This system cannot provide emergency medical care.',
+            confidence_score: 0.95
+          },
+          safety: {
+            emergency_detected: true,
+            disclaimer: 'This is not a substitute for professional medical advice. In case of emergency, contact emergency services immediately.',
+            urgent_care_recommended: true
+          },
+          recommendations: {
+            suggested_action: 'Contact emergency services immediately (911)',
+            follow_up_questions: []
+          },
+          processing_time_ms: Date.now() - startTime,
+          session_id: session_id || 'emergency-session'
+        });
+      }
+
+      // Phase 1: Get active agent for TxAgent communication
+      const agent = await agentService.getActiveAgent(userId);
+      
+      if (!agent || !agent.session_data?.runpod_endpoint) {
+        errorLogger.warn('No active TxAgent found for consultation', {
+          userId,
+          hasAgent: !!agent,
+          component: 'MedicalConsultation'
+        });
+
+        return res.status(503).json({
+          error: 'Medical AI service is not available. Please ensure TxAgent is running.',
+          code: 'SERVICE_UNAVAILABLE'
+        });
+      }
+
+      // Phase 1: Call TxAgent chat endpoint
+      const txAgentUrl = `${agent.session_data.runpod_endpoint}/chat`;
+      
+      errorLogger.info('Calling TxAgent for consultation', {
+        userId,
+        txAgentUrl,
+        agentId: agent.id,
+        component: 'MedicalConsultation'
+      });
+
+      const txAgentResponse = await fetch(txAgentUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': req.headers.authorization,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          query: query,
+          history: context?.conversation_history || [],
+          top_k: 5,
+          temperature: 0.7,
+          stream: false
+        }),
+        timeout: parseInt(process.env.TXAGENT_TIMEOUT) || 30000
+      });
+
+      if (!txAgentResponse.ok) {
+        throw new Error(`TxAgent responded with status ${txAgentResponse.status}`);
+      }
+
+      const txAgentData = await txAgentResponse.json();
+
+      // Phase 1: Log successful consultation
+      const consultationRecord = {
+        user_id: userId,
+        session_id: session_id || agent.id,
+        query: query,
+        response: txAgentData.response,
+        sources: txAgentData.sources || [],
+        consultation_type: 'ai_consultation',
+        processing_time: Date.now() - startTime,
+        emergency_detected: false,
+        context_used: {
+          agent_id: agent.id,
+          sources_count: txAgentData.sources?.length || 0
+        },
+        confidence_score: txAgentData.confidence_score || null,
+        recommendations: {
+          suggested_action: 'Consult with healthcare provider for personalized advice',
+          follow_up_questions: []
+        }
+      };
+
+      await supabaseClient
+        .from('medical_consultations')
+        .insert(consultationRecord);
+
+      errorLogger.info('Medical consultation completed successfully', {
+        userId,
+        processingTime: Date.now() - startTime,
+        sourcesCount: txAgentData.sources?.length || 0,
+        agentId: agent.id,
+        component: 'MedicalConsultation'
+      });
+
+      // Phase 1: Return response
+      res.json({
+        response: {
+          text: txAgentData.response,
+          sources: txAgentData.sources || [],
+          confidence_score: txAgentData.confidence_score
+        },
+        safety: {
+          emergency_detected: false,
+          disclaimer: 'This information is for educational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment.',
+          urgent_care_recommended: false
+        },
+        recommendations: consultationRecord.recommendations,
+        processing_time_ms: Date.now() - startTime,
+        session_id: session_id || agent.id
+      });
+
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      
+      errorLogger.error('Medical consultation failed', error, {
+        userId,
+        processingTime,
+        query: req.body.query?.substring(0, 100),
+        component: 'MedicalConsultation'
+      });
+
+      res.status(500).json({
+        error: 'Medical consultation failed. Please try again.',
+        code: 'CONSULTATION_FAILED',
+        processing_time_ms: processingTime
+      });
+    }
   });
-});
+
+  return router;
+}
 ```
 
-## Implementation Timeline
+### Priority 4: Update Main Routes
 
-### Week 1: Backend API Consolidation
-- [ ] Enhance existing `/upload` endpoint for mobile app compatibility
-- [ ] Implement `/api/medical-consultation` endpoint
-- [ ] Create secure voice processing endpoints
-- [ ] Add rate limiting and security middleware
+**File**: `backend/routes/index.js` (UPDATE EXISTING)
 
-### Week 2: Database Schema Updates
-- [ ] Update `medical_consultations` table with UUID session_id
-- [ ] Add computed summary fields to `user_medical_profiles`
-- [ ] Create necessary indexes and constraints
-- [ ] Test data migration scripts
+Add the new medical consultation router:
 
-### Week 3: Mobile App Integration
-- [ ] Update mobile app configuration to use backend endpoints
-- [ ] Remove client-side API keys and implement backend proxy calls
-- [ ] Update authentication flow to work with backend
-- [ ] Implement error handling and retry logic
+```javascript
+// Add import
+import { createMedicalConsultationRouter } from './medicalConsultation.js';
 
-### Week 4: Testing & Deployment
-- [ ] End-to-end testing of integrated system
-- [ ] Performance testing and optimization
-- [ ] Security audit and penetration testing
-- [ ] Production deployment and monitoring setup
+// In setupRoutes function, add:
+const medicalConsultationRouter = createMedicalConsultationRouter(supabaseClient);
+app.use('/api', medicalConsultationRouter);
+```
 
-## Risk Mitigation
+### Priority 5: Basic Health Check Enhancement
 
-### Data Consistency
-- Implement database transactions for multi-table operations
-- Add data validation at API layer
-- Create backup and rollback procedures
+**File**: `backend/routes/health.js` (UPDATE EXISTING)
 
-### Performance
-- Implement caching for frequently accessed data
-- Add database query optimization
-- Monitor API response times and set alerts
+Add TxAgent connectivity check:
 
-### Security
-- Regular security audits of API endpoints
-- Implement proper CORS policies
-- Add request logging and monitoring
-- Use environment-specific configurations
+```javascript
+// Add TxAgent health check
+if (process.env.TXAGENT_CONTAINER_URL) {
+  try {
+    const txAgentHealthUrl = `${process.env.TXAGENT_CONTAINER_URL}/health`;
+    const txAgentResponse = await axios.get(txAgentHealthUrl, { timeout: 5000 });
+    services.txagent = txAgentResponse.data?.status || 'connected';
+  } catch (error) {
+    services.txagent = 'unavailable';
+    errorLogger.warn('TxAgent health check failed', {
+      error: error.message,
+      component: 'HealthCheck'
+    });
+  }
+}
+```
 
-## Success Metrics
+## PHASE 1 TESTING PLAN
 
-### Technical Metrics
-- API response time < 500ms for 95% of requests
-- Database query performance < 100ms average
-- Zero data loss during migration
-- 99.9% uptime for critical endpoints
+### 1. Database Migration Test
+```sql
+-- Test the new table creation
+SELECT * FROM public.medical_consultations LIMIT 1;
 
-### User Experience Metrics
-- Mobile app crash rate < 0.1%
-- Voice transcription accuracy > 95%
-- AI consultation response time < 5 seconds
-- User session success rate > 99%
+-- Test RLS policies
+INSERT INTO public.medical_consultations (user_id, session_id, query, response)
+VALUES (auth.uid(), 'test-session', 'test query', 'test response');
+```
 
-## Post-Implementation Monitoring
+### 2. API Endpoint Tests
 
-### Daily Monitoring
-- API endpoint health and response times
-- Database performance and connection pool status
-- Error rates and exception tracking
-- User authentication success rates
+**Test 1: Basic Medical Consultation**
+```bash
+curl -X POST "http://localhost:8000/api/medical-consultation" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What are the symptoms of diabetes?",
+    "session_id": "test-session-123"
+  }'
+```
 
-### Weekly Reviews
-- Performance trend analysis
-- Security log review
-- User feedback analysis
-- Capacity planning assessment
+**Test 2: Emergency Detection**
+```bash
+curl -X POST "http://localhost:8000/api/medical-consultation" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "I am having severe chest pain and difficulty breathing",
+    "session_id": "emergency-test-123"
+  }'
+```
 
-### Monthly Assessments
-- Full security audit
-- Performance optimization review
-- Cost analysis and optimization
-- Feature usage analytics
+**Test 3: Service Unavailable (No TxAgent)**
+```bash
+# Test when TxAgent is not running
+curl -X POST "http://localhost:8000/api/medical-consultation" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What is hypertension?",
+    "session_id": "unavailable-test-123"
+  }'
+```
 
-This plan provides a comprehensive approach to integrating the mobile app with the existing backend infrastructure while maintaining data integrity, security, and performance standards.
+### 3. Health Check Test
+```bash
+curl -X GET "http://localhost:8000/health"
+# Should include txagent status in services object
+```
+
+## PHASE 1 SUCCESS CRITERIA
+
+### ✅ Database Ready
+- [ ] `medical_consultations` table created successfully
+- [ ] RLS policies working correctly
+- [ ] Can insert and query consultation records
+
+### ✅ API Functionality
+- [ ] `/api/medical-consultation` endpoint responds correctly
+- [ ] Emergency detection works for dangerous keywords
+- [ ] JWT forwarding to TxAgent works
+- [ ] Error handling for TxAgent unavailable
+- [ ] Consultation logging to database works
+
+### ✅ Integration Testing
+- [ ] Mobile app can call consultation endpoint
+- [ ] TxAgent container receives and processes requests
+- [ ] Database records are created with proper user isolation
+- [ ] Health check includes TxAgent status
+
+### ✅ Security & Compliance
+- [ ] JWT authentication required for all endpoints
+- [ ] RLS policies prevent cross-user data access
+- [ ] Emergency detection logs properly
+- [ ] Medical disclaimers included in responses
+
+## PHASE 1 DEPLOYMENT CHECKLIST
+
+### Environment Setup
+- [ ] `TXAGENT_CONTAINER_URL` configured
+- [ ] `ENABLE_EMERGENCY_DETECTION=true` set
+- [ ] Database migration applied
+- [ ] New route mounted in main router
+
+### Testing
+- [ ] All Phase 1 tests pass
+- [ ] Emergency detection working
+- [ ] TxAgent integration functional
+- [ ] Database logging operational
+
+### Monitoring
+- [ ] Logs show consultation requests
+- [ ] Emergency detections are logged
+- [ ] TxAgent call success/failure tracked
+- [ ] Database operations logged
+
+## NEXT PHASES PREVIEW
+
+### Phase 2: Enhanced Features (Week 2)
+- Voice generation via ElevenLabs
+- Enhanced emergency detection
+- User medical profiles table
+- Symptom tracking
+
+### Phase 3: Advanced Features (Week 3)
+- Video generation via TavusAI
+- Advanced analytics
+- Performance optimization
+- Production monitoring
+
+---
+
+**Phase 1 Focus**: Get the core medical consultation endpoint working with basic emergency detection and TxAgent integration. This provides the foundation for all future enhancements.
