@@ -64,6 +64,11 @@ class TTSService {
       return { error: 'Voice features are disabled' };
     }
 
+    if (!Config.ai.backendUserPortal) {
+      logger.error('Backend User Portal URL not configured for TTS');
+      return { error: 'Voice service not configured. Please check your settings.' };
+    }
+
     if (!this.checkRateLimit()) {
       return { error: 'Rate limit exceeded. Please wait before making more requests.' };
     }
@@ -87,12 +92,13 @@ class TTSService {
         throw new Error('Authentication required for text-to-speech');
       }
 
-      // Call our secure backend API
-      const response = await fetch('/api/voice/tts', {
+      // Call our secure backend API using the configured backend user portal URL
+      const response = await fetch(`${Config.ai.backendUserPortal}/api/voice/tts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
+          'User-Agent': 'SymptomSavior/1.0.0',
         },
         body: JSON.stringify({
           text,
@@ -111,6 +117,7 @@ class TTSService {
         const errorText = await response.text();
         logger.error('Backend TTS API error', { 
           status: response.status, 
+          statusText: response.statusText,
           error: errorText 
         });
         
@@ -120,6 +127,8 @@ class TTSService {
           return { error: 'Too many requests. Please wait before trying again.' };
         } else if (response.status === 400) {
           return { error: 'Invalid text content. Please try again with different text.' };
+        } else if (response.status === 404) {
+          return { error: 'Voice service not available. Please try again later.' };
         } else if (response.status === 503) {
           return { error: 'Voice service temporarily unavailable. Please try again later.' };
         } else {
@@ -141,6 +150,15 @@ class TTSService {
       return { audioUrl };
     } catch (error) {
       logger.error('TTS generation failed', error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          return { error: 'Authentication failed. Please sign in again.' };
+        } else if (error.message.includes('fetch')) {
+          return { error: 'Network error. Please check your connection and try again.' };
+        }
+      }
+      
       return { error: 'Network error. Please check your connection and try again.' };
     }
   }
