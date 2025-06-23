@@ -12,7 +12,7 @@ interface AppConfig {
   
   // AI Services
   ai: {
-    txAgentUrl: string | undefined;
+    backendUserPortal: string | undefined;
   };
   
   // Voice Services
@@ -73,8 +73,8 @@ export const Config: AppConfig = {
   },
   
   ai: {
-    // TxAgent URL is optional - app works in offline mode without it
-    txAgentUrl: process.env.EXPO_PUBLIC_TXAGENT_URL,
+    // Backend User Portal URL is optional - app works in offline mode without it
+    backendUserPortal: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
   },
   
   voice: {
@@ -109,7 +109,7 @@ if (Config.features.debug && typeof window !== 'undefined' && __DEV__) {
     },
     features: Config.features,
     ai: {
-      txAgentUrl: Config.ai.txAgentUrl ? '✅ Set' : '❌ Missing (offline mode)',
+      backendUserPortal: Config.ai.backendUserPortal ? '✅ Set' : '❌ Missing (offline mode)',
     },
     voice: {
       elevenLabsApiKey: Config.voice.elevenLabsApiKey ? '✅ Set' : '❌ Missing',

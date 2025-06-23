@@ -6,7 +6,7 @@ declare global {
       EXPO_PUBLIC_SUPABASE_ANON_KEY: string;
       
       // AI Integration
-      EXPO_PUBLIC_TXAGENT_URL: string;
+      EXPO_PUBLIC_BACKEND_USER_PORTAL: string;
       
       // Voice Services
       EXPO_PUBLIC_ELEVENLABS_API_KEY: string;
