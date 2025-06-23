@@ -18,17 +18,17 @@ export default function RootIndex() {
     );
   }
 
-  // Show configuration status if TxAgent URL is missing
-  if (!Config.ai.txAgentUrl && Config.features.debug) {
+  // Show configuration status if Backend User Portal URL is missing
+  if (!Config.ai.backendUserPortal && Config.features.debug) {
     return (
       <View style={styles.configContainer}>
         <View style={styles.configCard}>
           <Text style={styles.configTitle}>⚙️ Configuration Status</Text>
           <Text style={styles.configMessage}>
-            TxAgent URL not configured. The app will work in offline mode with fallback responses.
+            Backend User Portal URL not configured. The app will work in offline mode with fallback responses.
           </Text>
           <View style={styles.codeBlock}>
-            <Text style={styles.codeText}>EXPO_PUBLIC_TXAGENT_URL=your_txagent_url_here</Text>
+            <Text style={styles.codeText}>EXPO_PUBLIC_BACKEND_USER_PORTAL=your_backend_portal_url_here</Text>
           </View>
           <Text style={styles.configSubtext}>
             Add this to your .env file to enable full AI integration.

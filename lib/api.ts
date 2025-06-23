@@ -69,12 +69,12 @@ export interface ConsultationLogEntry {
  * Call TxAgent Medical Consultation API
  */
 export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentResponse> {
-  if (!Config.ai.txAgentUrl) {
-    throw new Error('TxAgent URL not configured. Please set EXPO_PUBLIC_TXAGENT_URL in your environment variables.');
+  if (!Config.ai.backendUserPortal) {
+    throw new Error('Backend User Portal URL not configured. Please set EXPO_PUBLIC_BACKEND_USER_PORTAL in your environment variables.');
   }
 
   try {
-    logger.debug('Calling TxAgent API', { 
+    logger.debug('Calling Backend User Portal API', { 
       query: request.query.substring(0, 100) + '...',
       hasContext: !!request.context,
       includeVoice: request.include_voice,
@@ -87,7 +87,7 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
       throw new Error('User not authenticated');
     }
 
-    const response = await fetch(`${Config.ai.txAgentUrl}/api/medical-consultation`, {
+    const response = await fetch(`${Config.ai.backendUserPortal}/api/medical-consultation`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -106,7 +106,7 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
 
     if (!response.ok) {
       const errorText = await response.text();
-      logger.error('TxAgent API error', { 
+      logger.error('Backend User Portal API error', { 
         status: response.status, 
         statusText: response.statusText,
         error: errorText 
@@ -125,7 +125,7 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
 
     const data: TxAgentResponse = await response.json();
     
-    logger.info('TxAgent response received', {
+    logger.info('Backend User Portal response received', {
       responseLength: data.response.text.length,
       sourcesCount: data.response.sources?.length || 0,
       emergencyDetected: data.safety.emergency_detected,
@@ -137,7 +137,7 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
 
     return data;
   } catch (error) {
-    logger.error('TxAgent API call failed', error);
+    logger.error('Backend User Portal API call failed', error);
     
     if (error instanceof Error) {
       throw error;
