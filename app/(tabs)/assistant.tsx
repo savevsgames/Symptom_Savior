@@ -159,15 +159,15 @@ export default function Assistant() {
       let response: TxAgentResponse;
 
       try {
-        // Call TxAgent API
+        // Call TxAgent API via Backend User Portal
         response = await callTxAgent(request);
         
         // Log the consultation
         await logConsultation(request, response);
       } catch (error) {
-        logger.error('TxAgent call failed, using fallback', error);
+        logger.error('Backend User Portal call failed, using fallback', error);
         
-        // Use fallback response if TxAgent is unavailable
+        // Use fallback response if backend is unavailable
         response = generateFallbackResponse(textToSend);
         
         // Show user-friendly error message
@@ -358,7 +358,7 @@ export default function Assistant() {
             <View style={styles.headerText}>
               <Text style={styles.headerTitle}>Medical AI Assistant</Text>
               <Text style={styles.headerSubtitle}>
-                {Config.ai.txAgentUrl ? 'Powered by TxAgent Medical RAG' : 'Offline Mode'}
+                {Config.ai.backendUserPortal ? 'Powered by TxAgent Medical RAG' : 'Offline Mode'}
               </Text>
             </View>
           </View>

@@ -66,7 +66,7 @@ export interface ConsultationLogEntry {
 }
 
 /**
- * Call TxAgent Medical Consultation API
+ * Call TxAgent Medical Consultation API via Backend User Portal
  */
 export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentResponse> {
   if (!Config.ai.backendUserPortal) {
@@ -307,7 +307,7 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string> {
 }
 
 /**
- * Fallback response generator for when TxAgent is unavailable
+ * Fallback response generator for when Backend User Portal is unavailable
  */
 export function generateFallbackResponse(query: string): TxAgentResponse {
   const sessionId = generateSessionId();
