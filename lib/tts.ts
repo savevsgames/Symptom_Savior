@@ -204,7 +204,8 @@ class TTSService {
       // Platform-specific audio playback
       if (Platform.OS === 'web') {
         // Web implementation using HTML5 Audio API
-        this.webAudio = new Audio(audioUrl);
+        // FIXED: Use window.Audio instead of Audio to ensure correct constructor reference
+        this.webAudio = new window.Audio(audioUrl);
         
         // Set up event listeners
         this.webAudio.onended = () => {
