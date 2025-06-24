@@ -42,7 +42,13 @@ class SpeechService {
       this.Audio = Audio;
       return Audio;
     } catch (error) {
-      logger.error('Failed to initialize Audio module', error);
+      logger.error('Failed to initialize Audio module', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
       return null;
     }
   }
@@ -110,7 +116,13 @@ class SpeechService {
       const { status } = await Audio.requestPermissionsAsync();
       return status === 'granted';
     } catch (error) {
-      logger.error('Failed to request microphone permissions', error);
+      logger.error('Failed to request microphone permissions', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
       return false;
     }
   }
@@ -125,7 +137,13 @@ class SpeechService {
       stream.getTracks().forEach(track => track.stop());
       return true;
     } catch (error) {
-      logger.error('Web microphone permission denied by user', error);
+      logger.error('Web microphone permission denied by user', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
       return false;
     }
   }
@@ -199,7 +217,15 @@ class SpeechService {
         }, options.maxDuration);
       }
     } catch (error) {
-      logger.error('Failed to start recording', error);
+      logger.error('Failed to start recording', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        platform: Platform.OS,
+        options
+      });
       this.isRecording = false;
       throw error;
     }
@@ -224,7 +250,13 @@ class SpeechService {
       logger.info('Audio recording stopped', { uri });
       return uri;
     } catch (error) {
-      logger.error('Failed to stop recording', error);
+      logger.error('Failed to stop recording', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
       this.isRecording = false;
       return null;
     }
@@ -316,7 +348,14 @@ class SpeechService {
         duration: result.duration,
       };
     } catch (error) {
-      logger.error('Audio transcription failed', error);
+      logger.error('Audio transcription failed', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        audioUri: audioUri ? `${audioUri.substring(0, 20)}...` : 'null'
+      });
       
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
@@ -363,7 +402,14 @@ class SpeechService {
         checkRecording();
       });
     } catch (error) {
-      logger.error('Record and transcribe failed', error);
+      logger.error('Record and transcribe failed', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        options
+      });
       throw error;
     }
   }
@@ -385,7 +431,13 @@ class SpeechService {
       const status = await this.recording.getStatusAsync();
       return status.isLoaded ? status.durationMillis || 0 : 0;
     } catch (error) {
-      logger.error('Failed to get recording duration', error);
+      logger.error('Failed to get recording duration', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
       return 0;
     }
   }
@@ -401,7 +453,13 @@ class SpeechService {
         this.isRecording = false;
         logger.info('Recording cancelled');
       } catch (error) {
-        logger.error('Failed to cancel recording', error);
+        logger.error('Failed to cancel recording', {
+          error: error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          } : error
+        });
       }
     }
   }
@@ -470,7 +528,14 @@ class SpeechService {
       const response = await fetch(uri);
       return await response.blob();
     } catch (error) {
-      logger.error('Failed to convert URI to blob', error);
+      logger.error('Failed to convert URI to blob', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        uri: uri ? `${uri.substring(0, 20)}...` : 'null'
+      });
       throw new Error('Failed to process audio file');
     }
   }

@@ -151,8 +151,10 @@ export default function Assistant() {
       const request: TxAgentRequest = {
         query: textToSend,
         context,
-        include_voice: Config.features.enableVoice,
-        include_video: Config.features.enableVideoAvatar,
+        // Only include voice if explicitly enabled in config AND this is a bot response
+        // (not for user messages)
+        include_voice: false, // Don't request voice in initial API call
+        include_video: false, // Don't request video in initial API call
         session_id: sessionId,
         preferred_agent: 'txagent', // Default to TxAgent
       };
@@ -166,7 +168,13 @@ export default function Assistant() {
         // Log the consultation
         await logConsultation(request, response);
       } catch (error) {
-        logger.error('Backend User Portal call failed, using fallback', error);
+        logger.error('Backend User Portal call failed, using fallback', {
+          error: error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          } : error
+        });
         
         // Use fallback response if backend is unavailable
         response = generateFallbackResponse(textToSend);
@@ -217,19 +225,25 @@ export default function Assistant() {
         }, 1000);
       }
 
-      // Generate and play TTS response if voice is enabled
+      // Generate and play TTS response if voice is enabled and explicitly requested
       if (Config.features.enableVoice && Config.voice.elevenLabsApiKey) {
-        // Use provided voice URL or generate TTS
+        // Only generate TTS if the user has explicitly requested it by clicking the play button
+        // This will be handled by the playAudioResponse function when the user clicks the button
         if (response.media?.voice_audio_url) {
-          playAudioResponse(response.media.voice_audio_url, botMessage.id);
-        } else {
-          // Generate TTS for the response
-          generateTTSResponse(response.response.text, botMessage.id);
+          // Store the voice URL but don't auto-play
+          botMessage.voiceUrl = response.media.voice_audio_url;
         }
       }
 
     } catch (error) {
-      logger.error('Message sending failed', error);
+      logger.error('Message sending failed', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        textToSend
+      });
       
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -281,7 +295,15 @@ export default function Assistant() {
         logger.info('TTS playback completed');
       }
     } catch (error) {
-      logger.error('TTS generation/playback failed', error);
+      logger.error('TTS generation/playback failed', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        messageId,
+        textLength: text.length
+      });
     } finally {
       setPlayingAudio(null);
     }
@@ -316,7 +338,15 @@ export default function Assistant() {
         }
       });
     } catch (error) {
-      logger.error('Failed to play audio response', error);
+      logger.error('Failed to play audio response', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        audioUrl,
+        messageId
+      });
       setPlayingAudio(null);
     }
   };
@@ -326,7 +356,13 @@ export default function Assistant() {
       await ttsService.stopAudio();
       setPlayingAudio(null);
     } catch (error) {
-      logger.error('Failed to stop audio playback', error);
+      logger.error('Failed to stop audio playback', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
     }
   };
 
@@ -427,7 +463,7 @@ export default function Assistant() {
                   {message.text}
                 </Text>
 
-                {/* Voice Playback Button */}
+                {/* Voice Playback Button - Only show for bot messages when voice is enabled */}
                 {message.isBot && Config.features.enableVoice && (
                   <TouchableOpacity
                     style={styles.voiceButton}
@@ -522,7 +558,7 @@ export default function Assistant() {
             onSubmitEditing={() => sendMessage()}
           />
           
-          {/* Voice Input Button */}
+          {/* Voice Input Button - Only show when voice is enabled */}
           {Config.features.enableVoice && (
             <VoiceRecordButton
               onTranscription={handleVoiceTranscription}

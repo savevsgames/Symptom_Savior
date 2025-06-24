@@ -60,7 +60,10 @@ class TTSService {
    */
   async generateSpeech(text: string, options: TTSOptions = {}): Promise<TTSResult> {
     if (!Config.features.enableVoice) {
-      logger.warn('Voice features are disabled in configuration');
+      logger.warn('Voice features are disabled in configuration', {
+        enableVoice: Config.features.enableVoice,
+        envValue: process.env.EXPO_PUBLIC_ENABLE_VOICE
+      });
       return { error: 'Voice features are disabled' };
     }
 
@@ -160,7 +163,16 @@ class TTSService {
 
       return { audioUrl };
     } catch (error) {
-      logger.error('TTS generation failed', error);
+      // Enhanced error logging with full details
+      logger.error('TTS generation failed', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        text: text.substring(0, 50) + '...',
+        options
+      });
       
       if (error instanceof Error) {
         if (error.message.includes('Authentication')) {
@@ -215,7 +227,14 @@ class TTSService {
 
       logger.info('TTS audio playback started');
     } catch (error) {
-      logger.error('Failed to play TTS audio', error);
+      logger.error('Failed to play TTS audio', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        audioUrl
+      });
       this.isPlaying = false;
       throw new Error('Failed to play audio. Please try again.');
     }
@@ -231,7 +250,13 @@ class TTSService {
         await this.sound.unloadAsync();
         logger.debug('TTS audio stopped');
       } catch (error) {
-        logger.error('Error stopping TTS audio', error);
+        logger.error('Error stopping TTS audio', {
+          error: error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          } : error
+        });
       } finally {
         this.cleanup();
       }
