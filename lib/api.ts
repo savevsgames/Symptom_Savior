@@ -71,7 +71,10 @@ export interface ConsultationLogEntry {
  */
 export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentResponse> {
   if (!Config.ai.backendUserPortal) {
-    logger.error('Backend User Portal URL not configured');
+    logger.error('Backend User Portal URL not configured', {
+      envVar: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+      configValue: Config.ai.backendUserPortal
+    });
     throw new Error('Backend User Portal URL not configured. Please set EXPO_PUBLIC_BACKEND_USER_PORTAL in your environment variables.');
   }
 
@@ -102,12 +105,17 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
       timestamp: new Date().toISOString(),
     };
 
+    // ADDED: Log the full URL being used for the API call
+    const fullUrl = `${Config.ai.backendUserPortal}/api/medical-consultation`;
     logger.debug('Making request to backend', { 
-      url: `${Config.ai.backendUserPortal}/api/medical-consultation`,
-      bodyKeys: Object.keys(requestBody)
+      fullUrl,
+      rawBackendUrl: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+      configBackendUrl: Config.ai.backendUserPortal,
+      bodyKeys: Object.keys(requestBody),
+      authToken: session.access_token ? '✅ Present (hidden)' : '❌ Missing'
     });
 
-    const response = await fetch(`${Config.ai.backendUserPortal}/api/medical-consultation`, {
+    const response = await fetch(fullUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -129,7 +137,7 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
         status: response.status, 
         statusText: response.statusText,
         error: errorText,
-        url: `${Config.ai.backendUserPortal}/api/medical-consultation`
+        url: fullUrl
       });
       
       if (response.status === 401) {

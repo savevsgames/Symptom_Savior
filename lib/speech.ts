@@ -239,12 +239,22 @@ class SpeechService {
     }
 
     if (!Config.ai.backendUserPortal) {
-      logger.error('Backend User Portal URL not configured for transcription');
+      logger.error('Backend User Portal URL not configured for transcription', {
+        envVar: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+        configValue: Config.ai.backendUserPortal
+      });
       throw new Error('Voice transcription service not configured. Please check your settings.');
     }
 
     try {
-      logger.debug('Starting audio transcription via backend API', { audioUri });
+      // ADDED: Log the full URL being used for the transcription API call
+      const fullUrl = `${Config.ai.backendUserPortal}/api/voice/transcribe`;
+      logger.debug('Starting audio transcription via backend API', { 
+        audioUri,
+        fullUrl,
+        rawBackendUrl: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+        configBackendUrl: Config.ai.backendUserPortal
+      });
 
       // Get current session for authentication
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -260,7 +270,7 @@ class SpeechService {
       formData.append('audio', audioBlob, 'recording.wav');
 
       // Call our secure backend API
-      const response = await fetch(`${Config.ai.backendUserPortal}/api/voice/transcribe`, {
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -275,7 +285,7 @@ class SpeechService {
           status: response.status, 
           statusText: response.statusText,
           error: errorText,
-          url: `${Config.ai.backendUserPortal}/api/voice/transcribe`
+          url: fullUrl
         });
         
         if (response.status === 401) {

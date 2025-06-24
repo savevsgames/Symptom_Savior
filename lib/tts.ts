@@ -65,7 +65,10 @@ class TTSService {
     }
 
     if (!Config.ai.backendUserPortal) {
-      logger.error('Backend User Portal URL not configured for TTS');
+      logger.error('Backend User Portal URL not configured for TTS', {
+        envVar: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+        configValue: Config.ai.backendUserPortal
+      });
       return { error: 'Voice service not configured. Please check your settings.' };
     }
 
@@ -84,7 +87,14 @@ class TTSService {
     }
 
     try {
-      logger.debug('Generating TTS audio via backend API', { textLength: text.length });
+      // ADDED: Log the full URL being used for the TTS API call
+      const fullUrl = `${Config.ai.backendUserPortal}/api/voice/tts`;
+      logger.debug('Generating TTS audio via backend API', { 
+        textLength: text.length,
+        fullUrl,
+        rawBackendUrl: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+        configBackendUrl: Config.ai.backendUserPortal
+      });
 
       // Get current session for authentication
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -93,7 +103,7 @@ class TTSService {
       }
 
       // Call our secure backend API using the configured backend user portal URL
-      const response = await fetch(`${Config.ai.backendUserPortal}/api/voice/tts`, {
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,7 +128,8 @@ class TTSService {
         logger.error('Backend TTS API error', { 
           status: response.status, 
           statusText: response.statusText,
-          error: errorText 
+          error: errorText,
+          url: fullUrl
         });
         
         if (response.status === 401) {
