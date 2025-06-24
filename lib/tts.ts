@@ -28,6 +28,7 @@ export interface TTSResult {
 
 class TTSService {
   private sound: Audio.Sound | null = null;
+  private webAudio: HTMLAudioElement | null = null;
   private isPlaying = false;
   private requestCount = 0;
   private lastRequestTime = 0;
@@ -150,15 +151,19 @@ class TTSService {
         }
       }
 
-      // Get audio blob from response
-      const audioBlob = await response.blob();
-      
-      // Create object URL for playback
-      const audioUrl = URL.createObjectURL(audioBlob);
+      // Get the audio URL directly from the response
+      // The backend should return a JSON object with an audio_url field
+      const result = await response.json();
+      const audioUrl = result.audio_url;
+
+      if (!audioUrl) {
+        logger.error('TTS API response missing audio URL', { result });
+        return { error: 'Invalid response from voice service' };
+      }
 
       logger.info('TTS audio generated successfully via backend', { 
         textLength: text.length,
-        audioSize: audioBlob.size 
+        audioUrl: audioUrl.substring(0, 50) + '...' // Log partial URL for privacy
       });
 
       return { audioUrl };
@@ -187,7 +192,7 @@ class TTSService {
   }
 
   /**
-   * Play audio from URL
+   * Play audio from URL with platform-specific implementation
    */
   async playAudio(audioUrl: string): Promise<void> {
     try {
@@ -196,36 +201,74 @@ class TTSService {
 
       logger.debug('Playing TTS audio', { audioUrl });
 
-      // Configure audio mode for playback
-      if (Platform.OS !== 'web') {
+      // Platform-specific audio playback
+      if (Platform.OS === 'web') {
+        // Web implementation using HTML5 Audio API
+        this.webAudio = new Audio(audioUrl);
+        
+        // Set up event listeners
+        this.webAudio.onended = () => {
+          logger.debug('Web audio playback ended');
+          this.isPlaying = false;
+          this.cleanup();
+        };
+        
+        this.webAudio.onerror = (e) => {
+          logger.error('Web audio playback error', { 
+            error: e,
+            audioUrl
+          });
+          this.isPlaying = false;
+          this.cleanup();
+        };
+        
+        // Start playback
+        try {
+          await this.webAudio.play();
+          this.isPlaying = true;
+          logger.info('Web audio playback started');
+        } catch (playError) {
+          logger.error('Web audio play() failed', {
+            error: playError instanceof Error ? {
+              name: playError.name,
+              message: playError.message,
+              stack: playError.stack
+            } : playError,
+            audioUrl
+          });
+          throw new Error('Failed to play audio. Please try again.');
+        }
+      } else {
+        // Native implementation using expo-av
+        // Configure audio mode for playback
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
           playsInSilentModeIOS: true,
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
         });
-      }
 
-      // Create and play sound
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: audioUrl },
-        { shouldPlay: true, volume: 1.0 }
-      );
+        // Create and play sound
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: audioUrl },
+          { shouldPlay: true, volume: 1.0 }
+        );
 
-      this.sound = sound;
-      this.isPlaying = true;
+        this.sound = sound;
+        this.isPlaying = true;
 
-      // Set up playback status listener
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded) {
-          if (status.didJustFinish) {
-            this.isPlaying = false;
-            this.cleanup();
+        // Set up playback status listener
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded) {
+            if (status.didJustFinish) {
+              this.isPlaying = false;
+              this.cleanup();
+            }
           }
-        }
-      });
+        });
 
-      logger.info('TTS audio playback started');
+        logger.info('Native audio playback started');
+      }
     } catch (error) {
       logger.error('Failed to play TTS audio', {
         error: error instanceof Error ? {
@@ -244,13 +287,31 @@ class TTSService {
    * Stop currently playing audio
    */
   async stopAudio(): Promise<void> {
-    if (this.sound) {
+    if (Platform.OS === 'web' && this.webAudio) {
       try {
+        // Web implementation
+        this.webAudio.pause();
+        this.webAudio.currentTime = 0;
+        logger.debug('Web audio stopped');
+      } catch (error) {
+        logger.error('Error stopping web audio', {
+          error: error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          } : error
+        });
+      } finally {
+        this.cleanup();
+      }
+    } else if (this.sound) {
+      try {
+        // Native implementation
         await this.sound.stopAsync();
         await this.sound.unloadAsync();
-        logger.debug('TTS audio stopped');
+        logger.debug('Native audio stopped');
       } catch (error) {
-        logger.error('Error stopping TTS audio', {
+        logger.error('Error stopping native audio', {
           error: error instanceof Error ? {
             name: error.name,
             message: error.message,
@@ -289,6 +350,16 @@ class TTSService {
    * Clean up resources
    */
   private cleanup(): void {
+    if (Platform.OS === 'web' && this.webAudio) {
+      // Remove event listeners
+      this.webAudio.onended = null;
+      this.webAudio.onerror = null;
+      
+      // Release resources
+      this.webAudio.src = '';
+      this.webAudio = null;
+    }
+    
     this.sound = null;
     this.isPlaying = false;
   }
