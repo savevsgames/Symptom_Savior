@@ -23,6 +23,8 @@ class SpeechService {
   private recording: any = null;
   private isRecording = false;
   private Audio: any = null;
+  private mediaRecorder: MediaRecorder | null = null;
+  private audioChunks: Blob[] = [];
   private requestCount = 0;
   private lastRequestTime = 0;
   private readonly RATE_LIMIT = 15; // Max 15 STT requests per minute
@@ -169,6 +171,75 @@ class SpeechService {
         if (!hasPermission) {
           throw new Error('Microphone permission not granted');
         }
+        
+        // Web implementation using MediaRecorder API
+        try {
+          // Reset audio chunks
+          this.audioChunks = [];
+          
+          // Get audio stream
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            } 
+          });
+          
+          // Create MediaRecorder with supported MIME type
+          // FIXED: Use a more widely supported MIME type for web browsers
+          const mimeType = this.getSupportedMimeType();
+          logger.debug('Using MIME type for recording', { mimeType });
+          
+          this.mediaRecorder = new MediaRecorder(stream, {
+            mimeType,
+            audioBitsPerSecond: 128000
+          });
+          
+          // Set up data handler
+          this.mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              this.audioChunks.push(event.data);
+            }
+          };
+          
+          // Set up error handler
+          this.mediaRecorder.onerror = (event) => {
+            logger.error('MediaRecorder error', {
+              error: event.error,
+              message: event.error.message
+            });
+            this.isRecording = false;
+          };
+          
+          // Start recording
+          this.mediaRecorder.start(100); // Collect data in 100ms chunks
+          this.isRecording = true;
+          
+          logger.info('Web audio recording started', { 
+            mimeType,
+            quality: options.quality,
+            maxDuration: options.maxDuration 
+          });
+          
+          // Auto-stop after max duration if specified
+          if (options.maxDuration) {
+            setTimeout(() => {
+              if (this.isRecording) {
+                this.stopRecording();
+              }
+            }, options.maxDuration);
+          }
+        } catch (webError) {
+          logger.error('Web MediaRecorder failed to initialize', {
+            error: webError instanceof Error ? {
+              name: webError.name,
+              message: webError.message,
+              stack: webError.stack
+            } : webError
+          });
+          throw new Error('Failed to start recording: ' + (webError instanceof Error ? webError.message : 'Unknown error'));
+        }
       } else {
         const Audio = await this.initializeAudio();
         if (!Audio) {
@@ -188,33 +259,28 @@ class SpeechService {
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
         });
-      }
 
-      // Set recording options based on quality
-      const recordingOptions = this.getRecordingOptions(options.quality || 'high');
+        // Set recording options based on quality
+        const recordingOptions = this.getRecordingOptions(options.quality || 'high');
 
-      // Create and start recording
-      const Audio = await this.initializeAudio();
-      if (!Audio) {
-        throw new Error('Audio module not available');
-      }
+        // Create and start recording
+        const { recording } = await Audio.Recording.createAsync(recordingOptions);
+        this.recording = recording;
+        this.isRecording = true;
 
-      const { recording } = await Audio.Recording.createAsync(recordingOptions);
-      this.recording = recording;
-      this.isRecording = true;
+        logger.info('Native audio recording started', { 
+          quality: options.quality,
+          maxDuration: options.maxDuration 
+        });
 
-      logger.info('Audio recording started', { 
-        quality: options.quality,
-        maxDuration: options.maxDuration 
-      });
-
-      // Auto-stop after max duration if specified
-      if (options.maxDuration) {
-        setTimeout(() => {
-          if (this.isRecording) {
-            this.stopRecording();
-          }
-        }, options.maxDuration);
+        // Auto-stop after max duration if specified
+        if (options.maxDuration) {
+          setTimeout(() => {
+            if (this.isRecording) {
+              this.stopRecording();
+            }
+          }, options.maxDuration);
+        }
       }
     } catch (error) {
       logger.error('Failed to start recording', {
@@ -232,23 +298,93 @@ class SpeechService {
   }
 
   /**
+   * Get supported MIME type for MediaRecorder
+   */
+  private getSupportedMimeType(): string {
+    // Try different MIME types in order of preference
+    const mimeTypes = [
+      'audio/webm',
+      'audio/webm;codecs=opus',
+      'audio/ogg;codecs=opus',
+      'audio/mp4',
+      'audio/mpeg',
+      'audio/wav'
+    ];
+    
+    for (const mimeType of mimeTypes) {
+      if (MediaRecorder.isTypeSupported(mimeType)) {
+        return mimeType;
+      }
+    }
+    
+    // Fallback to default
+    logger.warn('No preferred MIME types supported, using browser default');
+    return '';
+  }
+
+  /**
    * Stop audio recording and return the audio URI
    */
   async stopRecording(): Promise<string | null> {
     try {
-      if (!this.recording || !this.isRecording) {
+      if (Platform.OS === 'web') {
+        if (!this.mediaRecorder || this.mediaRecorder.state === 'inactive') {
+          logger.warn('No active web recording to stop');
+          return null;
+        }
+        
+        return new Promise((resolve) => {
+          this.mediaRecorder!.onstop = async () => {
+            try {
+              // Create a blob from all the chunks
+              const audioBlob = new Blob(this.audioChunks, { 
+                type: this.mediaRecorder!.mimeType || 'audio/webm' 
+              });
+              
+              // Create a URL for the blob
+              const audioUrl = URL.createObjectURL(audioBlob);
+              
+              this.isRecording = false;
+              this.audioChunks = [];
+              
+              // Stop all tracks in the stream
+              this.mediaRecorder!.stream.getTracks().forEach(track => track.stop());
+              this.mediaRecorder = null;
+              
+              logger.info('Web audio recording stopped', { 
+                blobSize: audioBlob.size,
+                mimeType: audioBlob.type
+              });
+              
+              resolve(audioUrl);
+            } catch (error) {
+              logger.error('Error processing web audio after stop', {
+                error: error instanceof Error ? {
+                  name: error.name,
+                  message: error.message,
+                  stack: error.stack
+                } : error
+              });
+              resolve(null);
+            }
+          };
+          
+          // Stop the recording
+          this.mediaRecorder!.stop();
+        });
+      } else if (!this.recording || !this.isRecording) {
         logger.warn('No active recording to stop');
         return null;
+      } else {
+        await this.recording.stopAndUnloadAsync();
+        const uri = this.recording.getURI();
+        
+        this.recording = null;
+        this.isRecording = false;
+
+        logger.info('Native audio recording stopped', { uri });
+        return uri;
       }
-
-      await this.recording.stopAndUnloadAsync();
-      const uri = this.recording.getURI();
-      
-      this.recording = null;
-      this.isRecording = false;
-
-      logger.info('Audio recording stopped', { uri });
-      return uri;
     } catch (error) {
       logger.error('Failed to stop recording', {
         error: error instanceof Error ? {
@@ -299,7 +435,12 @@ class SpeechService {
 
       // Prepare form data
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'recording.webm'); // Changed from .wav to .webm for web
+      // Use the correct file extension based on the blob's type
+      const fileExtension = audioBlob.type.includes('webm') ? 'webm' : 
+                           audioBlob.type.includes('mp4') ? 'm4a' :
+                           audioBlob.type.includes('mpeg') ? 'mp3' : 'audio';
+      
+      formData.append('audio', audioBlob, `recording.${fileExtension}`);
 
       // Call our secure backend API
       const response = await fetch(fullUrl, {
@@ -446,7 +587,30 @@ class SpeechService {
    * Cancel current recording
    */
   async cancelRecording(): Promise<void> {
-    if (this.recording && this.isRecording) {
+    if (Platform.OS === 'web' && this.mediaRecorder) {
+      try {
+        // Stop the MediaRecorder
+        this.mediaRecorder.stop();
+        
+        // Stop all tracks in the stream
+        this.mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        
+        // Clear resources
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.isRecording = false;
+        
+        logger.info('Web recording cancelled');
+      } catch (error) {
+        logger.error('Failed to cancel web recording', {
+          error: error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+          } : error
+        });
+      }
+    } else if (this.recording && this.isRecording) {
       try {
         await this.recording.stopAndUnloadAsync();
         this.recording = null;
