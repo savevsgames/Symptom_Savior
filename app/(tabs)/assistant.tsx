@@ -154,6 +154,7 @@ export default function Assistant() {
         include_voice: Config.features.enableVoice,
         include_video: Config.features.enableVideoAvatar,
         session_id: sessionId,
+        preferred_agent: 'txagent', // Default to TxAgent
       };
 
       let response: TxAgentResponse;

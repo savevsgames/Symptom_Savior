@@ -20,6 +20,7 @@ export interface TxAgentRequest {
   include_voice?: boolean;
   include_video?: boolean;
   session_id?: string;
+  preferred_agent?: string; // New parameter for agent selection
 }
 
 export interface TxAgentResponse {
@@ -70,6 +71,10 @@ export interface ConsultationLogEntry {
  */
 export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentResponse> {
   if (!Config.ai.backendUserPortal) {
+    logger.error('Backend User Portal URL not configured', {
+      envVar: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+      configValue: Config.ai.backendUserPortal
+    });
     throw new Error('Backend User Portal URL not configured. Please set EXPO_PUBLIC_BACKEND_USER_PORTAL in your environment variables.');
   }
 
@@ -78,30 +83,52 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
       query: request.query.substring(0, 100) + '...',
       hasContext: !!request.context,
       includeVoice: request.include_voice,
-      includeVideo: request.include_video
+      includeVideo: request.include_video,
+      preferredAgent: request.preferred_agent || 'txagent',
+      backendUrl: Config.ai.backendUserPortal
     });
 
     // Get user session for authentication
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session) {
+      logger.error('Authentication failed', sessionError);
       throw new Error('User not authenticated');
     }
 
-    const response = await fetch(`${Config.ai.backendUserPortal}/api/medical-consultation`, {
+    const requestBody = {
+      query: request.query,
+      context: request.context || {},
+      include_voice: request.include_voice || false,
+      include_video: request.include_video || false,
+      session_id: request.session_id || generateSessionId(),
+      preferred_agent: request.preferred_agent || 'txagent',
+      timestamp: new Date().toISOString(),
+    };
+
+    // ADDED: Log the full URL being used for the API call
+    const fullUrl = `${Config.ai.backendUserPortal}/api/medical-consultation`;
+    logger.debug('Making request to backend', { 
+      fullUrl,
+      rawBackendUrl: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+      configBackendUrl: Config.ai.backendUserPortal,
+      bodyKeys: Object.keys(requestBody),
+      authToken: session.access_token ? '✅ Present (hidden)' : '❌ Missing'
+    });
+
+    const response = await fetch(fullUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
         'User-Agent': 'SymptomSavior/1.0.0',
       },
-      body: JSON.stringify({
-        query: request.query,
-        context: request.context || {},
-        include_voice: request.include_voice || false,
-        include_video: request.include_video || false,
-        session_id: request.session_id || generateSessionId(),
-        timestamp: new Date().toISOString(),
-      }),
+      body: JSON.stringify(requestBody),
+    });
+
+    logger.debug('Backend response received', { 
+      status: response.status, 
+      statusText: response.statusText,
+      ok: response.ok
     });
 
     if (!response.ok) {
@@ -109,13 +136,18 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
       logger.error('Backend User Portal API error', { 
         status: response.status, 
         statusText: response.statusText,
-        error: errorText 
+        error: errorText,
+        url: fullUrl
       });
       
       if (response.status === 401) {
         throw new Error('Authentication failed. Please sign in again.');
       } else if (response.status === 429) {
         throw new Error('Too many requests. Please wait a moment and try again.');
+      } else if (response.status === 404) {
+        throw new Error('Medical consultation service not found. Please check your configuration.');
+      } else if (response.status === 503) {
+        throw new Error('Medical consultation service is temporarily unavailable. Please try again later.');
       } else if (response.status >= 500) {
         throw new Error('Medical consultation service is temporarily unavailable. Please try again later.');
       } else {
@@ -140,6 +172,7 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
     logger.error('Backend User Portal API call failed', error);
     
     if (error instanceof Error) {
+      // Re-throw known errors
       throw error;
     } else {
       throw new Error('An unexpected error occurred while processing your medical consultation.');
@@ -265,45 +298,6 @@ export function detectEmergency(text: string, severity?: number): {
     reason: 'No emergency indicators detected',
     confidence: 'high'
   };
-}
-
-/**
- * ElevenLabs Speech-to-Text Integration
- */
-export async function transcribeAudio(audioBlob: Blob): Promise<string> {
-  if (!Config.voice.elevenLabsApiKey) {
-    throw new Error('ElevenLabs API key not configured');
-  }
-
-  try {
-    logger.debug('Starting audio transcription');
-
-    const formData = new FormData();
-    formData.append('audio', audioBlob, 'recording.wav');
-    formData.append('model', 'whisper-1');
-
-    const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Config.voice.elevenLabsApiKey}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Transcription failed: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    logger.info('Audio transcription completed', { 
-      textLength: data.text?.length || 0 
-    });
-
-    return data.text || '';
-  } catch (error) {
-    logger.error('Audio transcription failed', error);
-    throw new Error('Failed to transcribe audio. Please try typing your message instead.');
-  }
 }
 
 /**

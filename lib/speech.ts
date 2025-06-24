@@ -6,6 +6,7 @@
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { logger } from '@/utils/logger';
+import { Config } from './config';
 
 export interface TranscriptionResult {
   text: string;
@@ -237,8 +238,23 @@ class SpeechService {
       throw new Error('Rate limit exceeded. Please wait before making more requests.');
     }
 
+    if (!Config.ai.backendUserPortal) {
+      logger.error('Backend User Portal URL not configured for transcription', {
+        envVar: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+        configValue: Config.ai.backendUserPortal
+      });
+      throw new Error('Voice transcription service not configured. Please check your settings.');
+    }
+
     try {
-      logger.debug('Starting audio transcription via backend API', { audioUri });
+      // ADDED: Log the full URL being used for the transcription API call
+      const fullUrl = `${Config.ai.backendUserPortal}/api/voice/transcribe`;
+      logger.debug('Starting audio transcription via backend API', { 
+        audioUri,
+        fullUrl,
+        rawBackendUrl: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+        configBackendUrl: Config.ai.backendUserPortal
+      });
 
       // Get current session for authentication
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -254,10 +270,11 @@ class SpeechService {
       formData.append('audio', audioBlob, 'recording.wav');
 
       // Call our secure backend API
-      const response = await fetch('/api/voice/transcribe', {
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
+          'User-Agent': 'SymptomSavior/1.0.0',
         },
         body: formData,
       });
@@ -266,7 +283,9 @@ class SpeechService {
         const errorText = await response.text();
         logger.error('Backend transcription API error', { 
           status: response.status, 
-          error: errorText 
+          statusText: response.statusText,
+          error: errorText,
+          url: fullUrl
         });
         
         if (response.status === 401) {
@@ -275,6 +294,8 @@ class SpeechService {
           throw new Error('Too many requests. Please wait before trying again.');
         } else if (response.status === 400) {
           throw new Error('Invalid audio format. Please try recording again.');
+        } else if (response.status === 404) {
+          throw new Error('Voice transcription service not available. Please try again later.');
         } else if (response.status === 503) {
           throw new Error('Voice service temporarily unavailable. Please try again later.');
         } else {
@@ -296,7 +317,18 @@ class SpeechService {
       };
     } catch (error) {
       logger.error('Audio transcription failed', error);
-      throw error;
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          throw new Error('Authentication failed. Please sign in again.');
+        } else if (error.message.includes('fetch') || error.message.includes('network')) {
+          throw new Error('Network error. Please check your connection and try again.');
+        } else {
+          throw error; // Re-throw the original error
+        }
+      }
+      
+      throw new Error('Failed to transcribe audio. Please try again later.');
     }
   }
 

@@ -119,6 +119,13 @@ if (Config.features.debug && typeof window !== 'undefined' && __DEV__) {
       tavusReplicaId: Config.video.tavusReplicaId ? '✅ Set' : '❌ Missing',
     },
   });
+
+  // ADDED: Explicit logging of raw environment variables
+  console.log('🔍 Raw Environment Variables:', {
+    BACKEND_USER_PORTAL: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+    ELEVENLABS_API_KEY: process.env.EXPO_PUBLIC_ELEVENLABS_API_KEY ? '✅ Set (hidden)' : '❌ Missing',
+    ENABLE_VOICE: process.env.EXPO_PUBLIC_ENABLE_VOICE,
+  });
 }
 
 export default Config;

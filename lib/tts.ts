@@ -64,6 +64,14 @@ class TTSService {
       return { error: 'Voice features are disabled' };
     }
 
+    if (!Config.ai.backendUserPortal) {
+      logger.error('Backend User Portal URL not configured for TTS', {
+        envVar: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+        configValue: Config.ai.backendUserPortal
+      });
+      return { error: 'Voice service not configured. Please check your settings.' };
+    }
+
     if (!this.checkRateLimit()) {
       return { error: 'Rate limit exceeded. Please wait before making more requests.' };
     }
@@ -79,7 +87,14 @@ class TTSService {
     }
 
     try {
-      logger.debug('Generating TTS audio via backend API', { textLength: text.length });
+      // ADDED: Log the full URL being used for the TTS API call
+      const fullUrl = `${Config.ai.backendUserPortal}/api/voice/tts`;
+      logger.debug('Generating TTS audio via backend API', { 
+        textLength: text.length,
+        fullUrl,
+        rawBackendUrl: process.env.EXPO_PUBLIC_BACKEND_USER_PORTAL,
+        configBackendUrl: Config.ai.backendUserPortal
+      });
 
       // Get current session for authentication
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -87,12 +102,13 @@ class TTSService {
         throw new Error('Authentication required for text-to-speech');
       }
 
-      // Call our secure backend API
-      const response = await fetch('/api/voice/tts', {
+      // Call our secure backend API using the configured backend user portal URL
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
+          'User-Agent': 'SymptomSavior/1.0.0',
         },
         body: JSON.stringify({
           text,
@@ -111,7 +127,9 @@ class TTSService {
         const errorText = await response.text();
         logger.error('Backend TTS API error', { 
           status: response.status, 
-          error: errorText 
+          statusText: response.statusText,
+          error: errorText,
+          url: fullUrl
         });
         
         if (response.status === 401) {
@@ -120,6 +138,8 @@ class TTSService {
           return { error: 'Too many requests. Please wait before trying again.' };
         } else if (response.status === 400) {
           return { error: 'Invalid text content. Please try again with different text.' };
+        } else if (response.status === 404) {
+          return { error: 'Voice service not available. Please try again later.' };
         } else if (response.status === 503) {
           return { error: 'Voice service temporarily unavailable. Please try again later.' };
         } else {
@@ -141,6 +161,15 @@ class TTSService {
       return { audioUrl };
     } catch (error) {
       logger.error('TTS generation failed', error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication')) {
+          return { error: 'Authentication failed. Please sign in again.' };
+        } else if (error.message.includes('fetch')) {
+          return { error: 'Network error. Please check your connection and try again.' };
+        }
+      }
+      
       return { error: 'Network error. Please check your connection and try again.' };
     }
   }
