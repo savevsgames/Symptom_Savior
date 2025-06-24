@@ -91,7 +91,11 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
     // Get user session for authentication
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session) {
-      logger.error('Authentication failed', sessionError);
+      logger.error('Authentication failed', {
+        error: sessionError?.message || 'No session available',
+        stack: sessionError?.stack,
+        code: sessionError?.code
+      });
       throw new Error('User not authenticated');
     }
 
@@ -169,7 +173,21 @@ export async function callTxAgent(request: TxAgentRequest): Promise<TxAgentRespo
 
     return data;
   } catch (error) {
-    logger.error('Backend User Portal API call failed', error);
+    // Enhanced error logging with full details
+    logger.error('Backend User Portal API call failed', {
+      error: error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      } : error,
+      request: {
+        query: request.query.substring(0, 50) + '...',
+        includeVoice: request.include_voice,
+        includeVideo: request.include_video,
+        preferredAgent: request.preferred_agent
+      },
+      backendUrl: Config.ai.backendUserPortal
+    });
     
     if (error instanceof Error) {
       // Re-throw known errors
@@ -218,12 +236,23 @@ export async function logConsultation(request: TxAgentRequest, response: TxAgent
       .insert(logEntry);
 
     if (error) {
-      logger.error('Failed to log consultation to database:', error);
+      logger.error('Failed to log consultation to database:', {
+        error: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
     } else {
       logger.info('Consultation logged to database successfully', { sessionId: response.session_id });
     }
   } catch (error) {
-    logger.error('Exception while logging consultation:', error);
+    logger.error('Exception while logging consultation:', {
+      error: error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      } : error
+    });
     // Don't throw here as logging failure shouldn't break the main flow
   }
 }
