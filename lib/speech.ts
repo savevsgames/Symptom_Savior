@@ -187,7 +187,6 @@ class SpeechService {
           });
           
           // Create MediaRecorder with supported MIME type
-          // FIXED: Use a more widely supported MIME type for web browsers
           const mimeType = this.getSupportedMimeType();
           logger.debug('Using MIME type for recording', { mimeType });
           
