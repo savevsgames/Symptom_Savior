@@ -1,17 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Plus, X, Heart, Pill, TriangleAlert as AlertTriangle, Calendar, User } from 'lucide-react-native';
+import { ArrowLeft, Plus, X, Heart, Pill, TriangleAlert as AlertTriangle, Calendar, User, FileText } from 'lucide-react-native';
 import { BaseButton, BaseTextInput, BaseCard } from '@/components/ui';
 import { useProfile } from '@/hooks/useProfile';
 import { theme } from '@/lib/theme';
+import { supabase } from '@/lib/supabase';
+import { logger } from '@/utils/logger';
 
 export default function MedicalHistory() {
   const [newCondition, setNewCondition] = useState('');
   const [newMedication, setNewMedication] = useState('');
   const [newAllergy, setNewAllergy] = useState('');
+  const [familyHistory, setFamilyHistory] = useState('');
   const [saving, setSaving] = useState(false);
+  const [summarizing, setSummarizing] = useState<{
+    conditions: boolean;
+    medications: boolean;
+    allergies: boolean;
+    familyHistory: boolean;
+  }>({
+    conditions: false,
+    medications: false,
+    allergies: false,
+    familyHistory: false
+  });
   
   const { 
     profile, 
@@ -24,7 +38,8 @@ export default function MedicalHistory() {
     deleteCondition,
     deleteMedication,
     deleteAllergy,
-    loading 
+    loading,
+    fetchProfile
   } = useProfile();
 
   const commonConditions = [
@@ -41,6 +56,12 @@ export default function MedicalHistory() {
     'Peanuts', 'Shellfish', 'Penicillin', 'Latex', 'Pollen',
     'Dust Mites', 'Pet Dander', 'Eggs', 'Milk', 'Soy'
   ];
+
+  useEffect(() => {
+    if (profile) {
+      setFamilyHistory(profile.family_history || '');
+    }
+  }, [profile]);
 
   const handleAddCondition = async () => {
     if (!newCondition.trim()) return;
@@ -96,6 +117,30 @@ export default function MedicalHistory() {
       setNewAllergy('');
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    }
+  };
+
+  const handleSaveFamilyHistory = async () => {
+    if (!profile) return;
+
+    setSaving(true);
+    
+    try {
+      const { error } = await supabase
+        .from('user_medical_profiles')
+        .update({ family_history: familyHistory.trim() || null })
+        .eq('id', profile.id);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to save family history. Please try again.');
+        return;
+      }
+
+      Alert.alert('Success', 'Family history saved successfully.');
+    } catch (error) {
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -173,6 +218,212 @@ export default function MedicalHistory() {
     }
   };
 
+  const handleSummarizeConditions = async () => {
+    if (!profile || conditions.length === 0) {
+      Alert.alert('No Data', 'Please add some medical conditions before generating a summary.');
+      return;
+    }
+
+    try {
+      setSummarizing(prev => ({ ...prev, conditions: true }));
+
+      // Get current session for authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication required');
+      }
+
+      // Call the summarize-conditions API
+      const response = await fetch('/api/profile/summarize-conditions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to summarize conditions');
+      }
+
+      const data = await response.json();
+      
+      // Refresh profile to get updated summary
+      await fetchProfile();
+      
+      Alert.alert('Success', 'Conditions summary generated successfully.');
+    } catch (error) {
+      logger.error('Failed to summarize conditions', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
+      
+      Alert.alert('Error', 'Failed to generate conditions summary. Please try again.');
+    } finally {
+      setSummarizing(prev => ({ ...prev, conditions: false }));
+    }
+  };
+
+  const handleSummarizeMedications = async () => {
+    if (!profile || medications.length === 0) {
+      Alert.alert('No Data', 'Please add some medications before generating a summary.');
+      return;
+    }
+
+    try {
+      setSummarizing(prev => ({ ...prev, medications: true }));
+
+      // Get current session for authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication required');
+      }
+
+      // Call the summarize-medications API
+      const response = await fetch('/api/profile/summarize-medications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to summarize medications');
+      }
+
+      const data = await response.json();
+      
+      // Refresh profile to get updated summary
+      await fetchProfile();
+      
+      Alert.alert('Success', 'Medications summary generated successfully.');
+    } catch (error) {
+      logger.error('Failed to summarize medications', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
+      
+      Alert.alert('Error', 'Failed to generate medications summary. Please try again.');
+    } finally {
+      setSummarizing(prev => ({ ...prev, medications: false }));
+    }
+  };
+
+  const handleSummarizeAllergies = async () => {
+    if (!profile || allergies.length === 0) {
+      Alert.alert('No Data', 'Please add some allergies before generating a summary.');
+      return;
+    }
+
+    try {
+      setSummarizing(prev => ({ ...prev, allergies: true }));
+
+      // Get current session for authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication required');
+      }
+
+      // Call the summarize-allergies API
+      const response = await fetch('/api/profile/summarize-allergies', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to summarize allergies');
+      }
+
+      const data = await response.json();
+      
+      // Refresh profile to get updated summary
+      await fetchProfile();
+      
+      Alert.alert('Success', 'Allergies summary generated successfully.');
+    } catch (error) {
+      logger.error('Failed to summarize allergies', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
+      
+      Alert.alert('Error', 'Failed to generate allergies summary. Please try again.');
+    } finally {
+      setSummarizing(prev => ({ ...prev, allergies: false }));
+    }
+  };
+
+  const handleSummarizeFamilyHistory = async () => {
+    if (!profile || !familyHistory.trim()) {
+      Alert.alert('No Data', 'Please enter family history information before generating a summary.');
+      return;
+    }
+
+    try {
+      setSummarizing(prev => ({ ...prev, familyHistory: true }));
+
+      // Get current session for authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication required');
+      }
+
+      // Call the summarize-family-history API
+      const response = await fetch('/api/profile/summarize-family-history', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          familyHistoryText: familyHistory.trim()
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to summarize family history');
+      }
+
+      const data = await response.json();
+      
+      // Update local state with the summarized text
+      setFamilyHistory(data.summary);
+      
+      // Refresh profile to get updated summary
+      await fetchProfile();
+      
+      Alert.alert('Success', 'Family history summarized successfully.');
+    } catch (error) {
+      logger.error('Failed to summarize family history', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
+      
+      Alert.alert('Error', 'Failed to summarize family history. Please try again.');
+    } finally {
+      setSummarizing(prev => ({ ...prev, familyHistory: false }));
+    }
+  };
+
   if (!profile) {
     return (
       <SafeAreaView style={styles.container}>
@@ -213,6 +464,15 @@ export default function MedicalHistory() {
           <View style={styles.sectionHeader}>
             <Heart size={20} color={theme.colors.error[500]} strokeWidth={2} />
             <Text style={styles.sectionTitle}>Medical Conditions</Text>
+            <BaseButton
+              title={summarizing.conditions ? "Summarizing..." : "Generate Summary"}
+              onPress={handleSummarizeConditions}
+              variant="outline"
+              size="sm"
+              disabled={summarizing.conditions || conditions.length === 0}
+              loading={summarizing.conditions}
+              style={styles.summarizeButton}
+            />
           </View>
           
           {/* Quick Add Buttons */}
@@ -255,11 +515,11 @@ export default function MedicalHistory() {
               <View key={condition.id} style={styles.itemTag}>
                 <View style={styles.itemContent}>
                   <Text style={styles.itemText}>{condition.condition_name}</Text>
-                  {condition.diagnosed_on && (
+                  {condition.diagnosed_at && (
                     <View style={styles.itemMeta}>
                       <Calendar size={12} color={theme.colors.text.tertiary} strokeWidth={2} />
                       <Text style={styles.itemMetaText}>
-                        {new Date(condition.diagnosed_on).getFullYear()}
+                        {new Date(condition.diagnosed_at).getFullYear()}
                       </Text>
                     </View>
                   )}
@@ -276,6 +536,14 @@ export default function MedicalHistory() {
               <Text style={styles.emptyText}>No medical conditions added yet</Text>
             )}
           </View>
+
+          {/* Conditions Summary */}
+          {profile.conditions_summary && (
+            <View style={styles.summaryContainer}>
+              <Text style={styles.summaryLabel}>AI-Generated Summary:</Text>
+              <Text style={styles.summaryText}>{profile.conditions_summary}</Text>
+            </View>
+          )}
         </BaseCard>
 
         {/* Current Medications */}
@@ -283,6 +551,15 @@ export default function MedicalHistory() {
           <View style={styles.sectionHeader}>
             <Pill size={20} color={theme.colors.primary[500]} strokeWidth={2} />
             <Text style={styles.sectionTitle}>Current Medications</Text>
+            <BaseButton
+              title={summarizing.medications ? "Summarizing..." : "Generate Summary"}
+              onPress={handleSummarizeMedications}
+              variant="outline"
+              size="sm"
+              disabled={summarizing.medications || medications.length === 0}
+              loading={summarizing.medications}
+              style={styles.summarizeButton}
+            />
           </View>
           
           {/* Quick Add Buttons */}
@@ -343,6 +620,14 @@ export default function MedicalHistory() {
               <Text style={styles.emptyText}>No medications added yet</Text>
             )}
           </View>
+
+          {/* Medications Summary */}
+          {profile.medications_summary && (
+            <View style={styles.summaryContainer}>
+              <Text style={styles.summaryLabel}>AI-Generated Summary:</Text>
+              <Text style={styles.summaryText}>{profile.medications_summary}</Text>
+            </View>
+          )}
         </BaseCard>
 
         {/* Allergies */}
@@ -350,6 +635,15 @@ export default function MedicalHistory() {
           <View style={styles.sectionHeader}>
             <AlertTriangle size={20} color={theme.colors.warning[500]} strokeWidth={2} />
             <Text style={styles.sectionTitle}>Allergies</Text>
+            <BaseButton
+              title={summarizing.allergies ? "Summarizing..." : "Generate Summary"}
+              onPress={handleSummarizeAllergies}
+              variant="outline"
+              size="sm"
+              disabled={summarizing.allergies || allergies.length === 0}
+              loading={summarizing.allergies}
+              style={styles.summarizeButton}
+            />
           </View>
           
           {/* Quick Add Buttons */}
@@ -410,6 +704,53 @@ export default function MedicalHistory() {
               <Text style={styles.emptyText}>No allergies added yet</Text>
             )}
           </View>
+
+          {/* Allergies Summary */}
+          {profile.allergies_summary && (
+            <View style={styles.summaryContainer}>
+              <Text style={styles.summaryLabel}>AI-Generated Summary:</Text>
+              <Text style={styles.summaryText}>{profile.allergies_summary}</Text>
+            </View>
+          )}
+        </BaseCard>
+
+        {/* Family History */}
+        <BaseCard style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <FileText size={20} color={theme.colors.secondary[500]} strokeWidth={2} />
+            <Text style={styles.sectionTitle}>Family Medical History</Text>
+            <BaseButton
+              title={summarizing.familyHistory ? "Summarizing..." : "Summarize"}
+              onPress={handleSummarizeFamilyHistory}
+              variant="outline"
+              size="sm"
+              disabled={summarizing.familyHistory || !familyHistory.trim()}
+              loading={summarizing.familyHistory}
+              style={styles.summarizeButton}
+            />
+          </View>
+          
+          <Text style={styles.familyHistoryLabel}>
+            Enter information about family medical conditions, hereditary diseases, or relevant health history:
+          </Text>
+          
+          <BaseTextInput
+            placeholder="Example: Mother has diabetes, father had heart disease, maternal grandmother had breast cancer..."
+            value={familyHistory}
+            onChangeText={setFamilyHistory}
+            multiline
+            style={styles.familyHistoryInput}
+          />
+          
+          <BaseButton
+            title={saving ? "Saving..." : "Save Family History"}
+            onPress={handleSaveFamilyHistory}
+            variant="outline"
+            size="md"
+            disabled={saving}
+            loading={saving}
+            style={styles.saveButton}
+          />
         </BaseCard>
 
         {/* Medical Summary */}
@@ -500,6 +841,11 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.semiBold,
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.primary,
+    marginLeft: theme.spacing.sm,
+    flex: 1,
+  },
+  
+  summarizeButton: {
     marginLeft: theme.spacing.sm,
   },
   
@@ -623,6 +969,46 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: theme.spacing.lg,
+  },
+  
+  summaryContainer: {
+    marginTop: theme.spacing.lg,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.background.tertiary,
+    borderRadius: theme.borderRadius.md,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.primary[500],
+  },
+  
+  summaryLabel: {
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.xs,
+  },
+  
+  summaryText: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.primary,
+    lineHeight: theme.typography.lineHeight.normal * theme.typography.fontSize.sm,
+  },
+  
+  familyHistoryLabel: {
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.md,
+  },
+  
+  familyHistoryInput: {
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  
+  saveButton: {
+    marginTop: theme.spacing.md,
+    alignSelf: 'flex-end',
   },
   
   summaryCard: {
