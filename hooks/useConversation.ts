@@ -7,6 +7,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
 import { Config } from '@/lib/config';
 import { Audio } from 'expo-av';
+import { supabase } from '@/lib/supabase';
 
 export enum ConversationState {
   IDLE = 'idle',               // No active conversation
@@ -44,7 +45,7 @@ export function useConversation(options?: ConversationOptions) {
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   
-  const { profile } = useProfile();
+  const { profile, loading: profileLoading } = useProfile();
   const { user } = useAuthContext();
   
   const conversationService = getConversationService();
@@ -109,10 +110,10 @@ export function useConversation(options?: ConversationOptions) {
   
   // Auto-start conversation if enabled
   useEffect(() => {
-    if (options?.autoStart && user && profile) {
+    if (options?.autoStart && user && profile && !profileLoading) {
       startConversation();
     }
-  }, [options?.autoStart, user, profile]);
+  }, [options?.autoStart, user, profile, profileLoading]);
   
   // Set up conversation service event listeners
   useEffect(() => {

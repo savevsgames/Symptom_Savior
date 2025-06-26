@@ -431,24 +431,22 @@ class SpeechService {
 
       // Convert audio URI to blob
       const audioBlob = await this.uriToBlob(audioUri);
-
-      // Prepare form data
-      const formData = new FormData();
-      // Use the correct file extension based on the blob's type
-      const fileExtension = audioBlob.type.includes('webm') ? 'webm' : 
-                           audioBlob.type.includes('mp4') ? 'm4a' :
-                           audioBlob.type.includes('mpeg') ? 'mp3' : 'audio';
       
-      formData.append('audio', audioBlob, `recording.${fileExtension}`);
+      // Convert blob to base64 string
+      const base64Audio = await this.blobToBase64(audioBlob);
 
-      // Call our secure backend API
+      // Call our secure backend API with JSON payload instead of FormData
       const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
           'User-Agent': 'SymptomSavior/1.0.0',
         },
-        body: formData,
+        body: JSON.stringify({
+          audio_data: base64Audio,
+          mime_type: audioBlob.type || 'audio/webm'
+        }),
       });
 
       if (!response.ok) {
@@ -509,6 +507,23 @@ class SpeechService {
       
       throw new Error('Failed to transcribe audio. Please try again later.');
     }
+  }
+
+  /**
+   * Convert Blob to Base64 string
+   */
+  private async blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        // Remove the data URL prefix (e.g., "data:audio/webm;base64,")
+        const base64Data = base64String.split(',')[1];
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
   }
 
   /**
