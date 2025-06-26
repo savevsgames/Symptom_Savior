@@ -45,7 +45,7 @@ export default function PersonalInfo() {
       setFullName(profile.full_name || '');
       setDateOfBirth(profile.date_of_birth || '');
       setGender(profile.gender || '');
-      setBloodGroup(profile.blood_group || '');
+      setBloodGroup(profile.blood_type || '');
       setHeightCm(profile.height_cm?.toString() || '');
       setWeightKg(profile.weight_kg?.toString() || '');
       
@@ -73,7 +73,7 @@ export default function PersonalInfo() {
         full_name: fullName.trim() || undefined,
         date_of_birth: dateOfBirth || undefined,
         gender: gender || undefined,
-        blood_group: bloodGroup || undefined,
+        blood_type: bloodGroup || undefined,
         height_cm: heightCm ? parseFloat(heightCm) : undefined,
         weight_kg: weightKg ? parseFloat(weightKg) : undefined,
         emergency_contact: emergencyContact,
