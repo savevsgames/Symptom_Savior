@@ -58,6 +58,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="assistant-conversation"
+        options={{
+          title: 'AI Chat',
+          tabBarIcon: ({ size, color }) => (
+            <MessageCircle size={size} color={color} strokeWidth={2} />
+          ),
+          tabBarButton: () => null, // Hide this tab from the tab bar
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
