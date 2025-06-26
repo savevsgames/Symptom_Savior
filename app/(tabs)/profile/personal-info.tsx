@@ -62,12 +62,13 @@ export default function PersonalInfo() {
     setSaving(true);
     
     try {
+      // Only include emergency contact if at least one field is filled
       const emergencyContact = emergencyContactName.trim() || emergencyContactPhone.trim() 
         ? {
             name: emergencyContactName.trim(),
             phone: emergencyContactPhone.trim(),
           }
-        : {};
+        : undefined;
 
       const profileData = {
         full_name: fullName.trim() || undefined,
@@ -76,7 +77,8 @@ export default function PersonalInfo() {
         blood_type: bloodGroup || undefined,
         height_cm: heightCm ? parseFloat(heightCm) : undefined,
         weight_kg: weightKg ? parseFloat(weightKg) : undefined,
-        emergency_contact: emergencyContact,
+        // Only include emergency_contact if the column exists in the database
+        ...(emergencyContact && { emergency_contact: emergencyContact }),
       };
 
       const { error } = await createOrUpdateProfile(profileData);
