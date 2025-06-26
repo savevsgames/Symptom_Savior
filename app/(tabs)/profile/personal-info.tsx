@@ -18,7 +18,7 @@ export default function PersonalInfo() {
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [saving, setSaving] = useState(false);
   
-  const { profile, createOrUpdateProfile, loading } = useProfile();
+  const { profile, createOrUpdateProfile, loading, calculateAge } = useProfile();
 
   const genderOptions = [
     { value: 'female', label: 'Female', emoji: '♀️' },
@@ -98,18 +98,6 @@ export default function PersonalInfo() {
     }
   };
 
-  const calculateAge = () => {
-    if (!dateOfBirth) return null;
-    const today = new Date();
-    const birthDate = new Date(dateOfBirth);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  };
-
   const calculateBMI = () => {
     if (!heightCm || !weightKg) return null;
     const height = parseFloat(heightCm) / 100; // Convert cm to meters
@@ -159,10 +147,10 @@ export default function PersonalInfo() {
             leftIcon={<Calendar size={20} color={theme.colors.text.tertiary} strokeWidth={2} />}
           />
 
-          {calculateAge() && (
+          {dateOfBirth && calculateAge(dateOfBirth) !== null && (
             <View style={styles.calculatedValue}>
               <Text style={styles.calculatedLabel}>Age: </Text>
-              <Text style={styles.calculatedText}>{calculateAge()} years old</Text>
+              <Text style={styles.calculatedText}>{calculateAge(dateOfBirth)} years old</Text>
             </View>
           )}
         </BaseCard>
@@ -296,7 +284,7 @@ export default function PersonalInfo() {
         </BaseCard>
 
         {/* Health Summary */}
-        {(fullName || calculateAge() || calculateBMI()) && (
+        {(fullName || dateOfBirth || calculateBMI()) && (
           <BaseCard style={[styles.section, styles.summaryCard]}>
             <Text style={styles.summaryTitle}>Health Profile Summary</Text>
             <View style={styles.summaryContent}>
@@ -306,10 +294,10 @@ export default function PersonalInfo() {
                   <Text style={styles.summaryValue}>{fullName}</Text>
                 </View>
               )}
-              {calculateAge() && (
+              {dateOfBirth && calculateAge(dateOfBirth) !== null && (
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>Age:</Text>
-                  <Text style={styles.summaryValue}>{calculateAge()} years</Text>
+                  <Text style={styles.summaryValue}>{calculateAge(dateOfBirth)} years</Text>
                 </View>
               )}
               {gender && (

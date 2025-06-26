@@ -13,8 +13,9 @@ export interface UserMedicalProfile {
   user_id: string;
   full_name?: string;
   date_of_birth?: string;
+  age?: number;
   gender?: 'female' | 'male' | 'non_binary' | 'prefer_not_to_say' | 'other';
-  blood_group?: 'A+' | 'A‑' | 'B+' | 'B‑' | 'AB+' | 'AB‑' | 'O+' | 'O‑' | 'unknown';
+  blood_type?: 'A+' | 'A‑' | 'B+' | 'B‑' | 'AB+' | 'AB‑' | 'O+' | 'O‑' | 'unknown';
   height_cm?: number;
   weight_kg?: number;
   emergency_contact?: any;
@@ -71,7 +72,7 @@ interface CreateProfileData {
   full_name?: string;
   date_of_birth?: string;
   gender?: 'female' | 'male' | 'non_binary' | 'prefer_not_to_say' | 'other';
-  blood_group?: 'A+' | 'A‑' | 'B+' | 'B‑' | 'AB+' | 'AB‑' | 'O+' | 'O‑' | 'unknown';
+  blood_type?: 'A+' | 'A‑' | 'B+' | 'B‑' | 'AB+' | 'AB‑' | 'O+' | 'O‑' | 'unknown';
   height_cm?: number;
   weight_kg?: number;
   emergency_contact?: any;
@@ -448,6 +449,22 @@ export function useProfile() {
     return Math.round((completedFields / fields.length) * 100);
   };
 
+  // Calculate age from date of birth
+  const calculateAge = (dateOfBirth: string): number | null => {
+    if (!dateOfBirth) return null;
+    
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    
+    return age;
+  };
+
   useEffect(() => {
     if (user) {
       fetchProfile();
@@ -492,6 +509,7 @@ export function useProfile() {
     
     // Utility
     getProfileCompletionPercentage,
+    calculateAge,
     refetch: fetchProfile,
   };
 }
