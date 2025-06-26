@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Send, Bot, User, Heart, TriangleAlert as AlertTriangle, Volume2, VolumeX } from 'lucide-react-native';
+import { Send, Bot, User, Heart, TriangleAlert as AlertTriangle, Volume2, VolumeX, MessageCircle } from 'lucide-react-native';
 import { Audio } from 'expo-av';
+import { router } from 'expo-router';
 import { useProfile } from '@/hooks/useProfile';
 import { useSymptoms } from '@/hooks/useSymptoms';
 import { callTxAgent, logConsultation, detectEmergency, generateFallbackResponse, type TxAgentRequest, type TxAgentResponse } from '@/lib/api';
@@ -11,6 +12,7 @@ import { type TranscriptionResult } from '@/lib/speech';
 import { ttsService } from '@/lib/tts';
 import { Config } from '@/lib/config';
 import { logger } from '@/utils/logger';
+import { BaseButton } from '@/components/ui';
 
 interface Message {
   id: string;
@@ -378,6 +380,10 @@ export default function Assistant() {
     });
   };
 
+  const navigateToConversationView = () => {
+    router.push('/(tabs)/assistant-conversation');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
@@ -420,6 +426,17 @@ export default function Assistant() {
             </Text>
           </View>
         )}
+
+        {/* New Conversation Mode Banner */}
+        <TouchableOpacity 
+          style={styles.newModeBanner}
+          onPress={navigateToConversationView}
+        >
+          <MessageCircle size={16} color="#FFFFFF" strokeWidth={2} />
+          <Text style={styles.newModeText}>
+            Try our new conversational AI experience!
+          </Text>
+        </TouchableOpacity>
 
         {/* Messages */}
         <ScrollView 
@@ -545,6 +562,17 @@ export default function Assistant() {
           </View>
         )}
 
+        {/* Try New Experience Button */}
+        <View style={styles.newExperienceContainer}>
+          <BaseButton
+            title="Try New Conversational Experience"
+            onPress={navigateToConversationView}
+            variant="primary"
+            size="md"
+            fullWidth
+          />
+        </View>
+
         {/* Input */}
         <View style={styles.inputContainer}>
           <TextInput
@@ -646,6 +674,20 @@ const styles = StyleSheet.create({
   },
   emergencyText: {
     fontFamily: 'Inter-Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
+  newModeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0066CC',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  newModeText: {
+    fontFamily: 'Inter-Medium',
     fontSize: 14,
     color: '#FFFFFF',
     marginLeft: 8,
@@ -809,6 +851,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     fontSize: 12,
     color: '#0066CC',
+  },
+  newExperienceContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
   },
   inputContainer: {
     flexDirection: 'row',
