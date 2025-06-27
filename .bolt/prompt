@@ -16,6 +16,7 @@ The AI functionality is powered by TxAgent, a specialized medical RAG (Retrieval
 
 ## FILES TO HELP BUILD
 
+- The original upgrade plan is in Docs/Portal_Upgrade_Plan.md and is mostly complete, yet untested and there are errors to fix. It can be used for historical reference, but we will be needing a new plan soon to complete the project. 
 - There is a file for you to use as an external memory. Use it as a previous, current and next task manager and a memory bank - Docs/Memory.md
 - There is a file with the database schema and migration context - Socs/Supabase_Config.md 
 - Log changes to the changelog file - Docs/Changelog.md 
