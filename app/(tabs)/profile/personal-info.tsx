@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ArrowLeft, User, Calendar, Ruler, Weight, Droplet, Phone } from 'lucide-react-native';
 import { BaseButton, BaseTextInput, BaseCard } from '@/components/ui';
 import { useProfile } from '@/hooks/useProfile';
 import { theme } from '@/lib/theme';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function PersonalInfo() {
   const [fullName, setFullName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerValue, setDatePickerValue] = useState(new Date());
   const [gender, setGender] = useState<'female' | 'male' | 'non_binary' | 'prefer_not_to_say' | 'other' | ''>('');
-  const [bloodGroup, setBloodGroup] = useState<'A+' | 'A‑' | 'B+' | 'B‑' | 'AB+' | 'AB‑' | 'O+' | 'O‑' | 'unknown' | ''>('');
+  const [bloodGroup, setBloodGroup] = useState<'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-' | 'unknown' | ''>('');
   const [heightCm, setHeightCm] = useState('');
   const [weightKg, setWeightKg] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
@@ -30,13 +33,13 @@ export default function PersonalInfo() {
 
   const bloodGroupOptions = [
     { value: 'A+', label: 'A+', color: theme.colors.error[500] },
-    { value: 'A‑', label: 'A-', color: theme.colors.error[400] },
+    { value: 'A-', label: 'A-', color: theme.colors.error[400] },
     { value: 'B+', label: 'B+', color: theme.colors.warning[500] },
-    { value: 'B‑', label: 'B-', color: theme.colors.warning[400] },
+    { value: 'B-', label: 'B-', color: theme.colors.warning[400] },
     { value: 'AB+', label: 'AB+', color: theme.colors.primary[500] },
-    { value: 'AB‑', label: 'AB-', color: theme.colors.primary[400] },
+    { value: 'AB-', label: 'AB-', color: theme.colors.primary[400] },
     { value: 'O+', label: 'O+', color: theme.colors.success[500] },
-    { value: 'O‑', label: 'O-', color: theme.colors.success[400] },
+    { value: 'O-', label: 'O-', color: theme.colors.success[400] },
     { value: 'unknown', label: 'Unknown', color: theme.colors.neutral[400] },
   ];
 
@@ -44,6 +47,9 @@ export default function PersonalInfo() {
     if (profile) {
       setFullName(profile.full_name || '');
       setDateOfBirth(profile.date_of_birth || '');
+      if (profile.date_of_birth) {
+        setDatePickerValue(new Date(profile.date_of_birth));
+      }
       setGender(profile.gender || '');
       setBloodGroup(profile.blood_type || '');
       setHeightCm(profile.height_cm?.toString() || '');
@@ -68,7 +74,7 @@ export default function PersonalInfo() {
             name: emergencyContactName.trim(),
             phone: emergencyContactPhone.trim(),
           }
-        : undefined;
+        : {};
 
       const profileData = {
         full_name: fullName.trim() || undefined,
@@ -114,6 +120,22 @@ export default function PersonalInfo() {
     return { category: 'Obese', color: theme.colors.error[500] };
   };
 
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    
+    if (selectedDate) {
+      setDatePickerValue(selectedDate);
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      setDateOfBirth(formattedDate);
+    }
+  };
+
+  const showDatePickerModal = () => {
+    setShowDatePicker(true);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -140,13 +162,63 @@ export default function PersonalInfo() {
             onChangeText={setFullName}
           />
 
-          <BaseTextInput
-            label="Date of Birth"
-            placeholder="YYYY-MM-DD"
-            value={dateOfBirth}
-            onChangeText={setDateOfBirth}
-            leftIcon={<Calendar size={20} color={theme.colors.text.tertiary} strokeWidth={2} />}
-          />
+          {/* Date of Birth Field with Custom Picker */}
+          <TouchableOpacity 
+            style={styles.datePickerButton}
+            onPress={showDatePickerModal}
+          >
+            <View style={styles.dateInputContainer}>
+              <View style={styles.dateInputIcon}>
+                <Calendar size={20} color={theme.colors.text.tertiary} strokeWidth={2} />
+              </View>
+              <View style={styles.dateInputContent}>
+                <Text style={styles.dateInputLabel}>Date of Birth</Text>
+                <Text style={dateOfBirth ? styles.dateInputValue : styles.dateInputPlaceholder}>
+                  {dateOfBirth ? dateOfBirth : 'Select date of birth'}
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Date Picker Modal for iOS */}
+          {Platform.OS === 'ios' && showDatePicker && (
+            <Modal
+              transparent={true}
+              animationType="slide"
+              visible={showDatePicker}
+            >
+              <View style={styles.modalContainer}>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Select Date of Birth</Text>
+                    <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                      <Text style={styles.modalCloseButton}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <DateTimePicker
+                    value={datePickerValue}
+                    mode="date"
+                    display="spinner"
+                    onChange={handleDateChange}
+                    maximumDate={new Date()}
+                    minimumDate={new Date(1900, 0, 1)}
+                  />
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          {/* Date Picker for Android */}
+          {Platform.OS === 'android' && showDatePicker && (
+            <DateTimePicker
+              value={datePickerValue}
+              mode="date"
+              display="default"
+              onChange={handleDateChange}
+              maximumDate={new Date()}
+              minimumDate={new Date(1900, 0, 1)}
+            />
+          )}
 
           {dateOfBirth && calculateAge(dateOfBirth) !== null && (
             <View style={styles.calculatedValue}>
@@ -569,5 +641,71 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background.primary,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border.light,
+  },
+
+  // Date picker styles
+  datePickerButton: {
+    marginBottom: theme.spacing.md,
+  },
+  dateInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.colors.border.light,
+    borderRadius: theme.borderRadius.md,
+    height: theme.components.input.height,
+    paddingHorizontal: theme.components.input.paddingHorizontal,
+    backgroundColor: theme.colors.background.primary,
+  },
+  dateInputIcon: {
+    marginRight: theme.spacing.sm,
+  },
+  dateInputContent: {
+    flex: 1,
+  },
+  dateInputLabel: {
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.secondary,
+    marginBottom: 2,
+  },
+  dateInputValue: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.primary,
+  },
+  dateInputPlaceholder: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.tertiary,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: theme.colors.background.primary,
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border.light,
+  },
+  modalTitle: {
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.primary,
+  },
+  modalCloseButton: {
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.primary[500],
   },
 });
