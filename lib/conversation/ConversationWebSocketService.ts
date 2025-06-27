@@ -69,6 +69,14 @@ export class ConversationWebSocketService {
         throw new Error('Authentication required for conversation');
       }
       
+      // Log the request details for debugging
+      logger.debug('Starting conversation session', {
+        backendUrl: Config.ai.backendUserPortal,
+        endpoint: '/api/conversation/start',
+        hasProfile: !!profile,
+        authToken: session.access_token ? 'Present (hidden)' : 'Missing'
+      });
+      
       // Initialize conversation session via REST
       const response = await fetch(`${Config.ai.backendUserPortal}/api/conversation/start`, {
         method: 'POST',
@@ -82,25 +90,42 @@ export class ConversationWebSocketService {
         })
       });
       
+      // Log the response status for debugging
+      logger.debug('Conversation start response received', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
+      });
+      
       if (!response.ok) {
         const errorText = await response.text();
+        logger.error('Failed to start conversation', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
         throw new Error(`Failed to start conversation: ${response.status} ${errorText}`);
       }
       
-      const { session_id, websocket_url } = await response.json();
-      this.sessionId = session_id;
+      const data = await response.json();
+      this.sessionId = data.session_id;
       
       // Connect to WebSocket
-      await this.connectWebSocket(websocket_url);
-      
-      logger.info('Conversation session started', { 
-        sessionId: session_id,
-        websocketUrl: websocket_url.substring(0, 30) + '...' // Truncate for privacy
-      });
+      if (data.websocket_url) {
+        await this.connectWebSocket(data.websocket_url);
+        
+        logger.info('Conversation session started', { 
+          sessionId: data.session_id,
+          websocketUrl: data.websocket_url.substring(0, 30) + '...' // Truncate for privacy
+        });
+      } else {
+        logger.warn('No WebSocket URL provided in response', { data });
+        // Fallback to HTTP-based conversation if WebSocket URL is not provided
+      }
       
       return {
-        session_id,
-        websocket_url,
+        session_id: data.session_id,
+        websocket_url: data.websocket_url || '',
         status: 'connected'
       };
     } catch (error) {
@@ -139,35 +164,58 @@ export class ConversationWebSocketService {
       logger.debug('Connecting to WebSocket', { url: url.substring(0, 30) + '...' });
       
       return new Promise((resolve, reject) => {
-        this.ws = new WebSocket(url);
-        
-        this.ws.onopen = () => {
-          this.reconnectAttempts = 0;
+        try {
+          this.ws = new WebSocket(url);
+          
+          this.ws.onopen = () => {
+            this.reconnectAttempts = 0;
+            this.isConnecting = false;
+            this.onConnectionEstablished();
+            resolve();
+          };
+          
+          this.ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              this.handleWebSocketMessage(data);
+            } catch (parseError) {
+              logger.error('Error parsing WebSocket message', {
+                error: parseError,
+                data: typeof event.data === 'string' ? event.data.substring(0, 100) : 'Non-string data'
+              });
+            }
+          };
+          
+          this.ws.onerror = (error) => {
+            logger.error('WebSocket error', { error });
+            this.isConnecting = false;
+            this.triggerEvent('connection_error', error);
+            reject(error);
+          };
+          
+          this.ws.onclose = (event) => {
+            logger.debug('WebSocket closed', { 
+              code: event.code,
+              reason: event.reason,
+              wasClean: event.wasClean
+            });
+            this.isConnecting = false;
+            this.handleDisconnection();
+          };
+        } catch (wsError) {
+          logger.error('Error creating WebSocket', {
+            error: wsError,
+            url
+          });
           this.isConnecting = false;
-          this.onConnectionEstablished();
-          resolve();
-        };
-        
-        this.ws.onmessage = (event) => {
-          this.handleWebSocketMessage(JSON.parse(event.data));
-        };
-        
-        this.ws.onerror = (error) => {
-          logger.error('WebSocket error', { error });
-          this.isConnecting = false;
-          this.triggerEvent('connection_error', error);
-          reject(error);
-        };
-        
-        this.ws.onclose = () => {
-          this.isConnecting = false;
-          this.handleDisconnection();
-        };
+          reject(wsError);
+        }
         
         // Set connection timeout
         setTimeout(() => {
           if (this.isConnecting) {
             this.isConnecting = false;
+            logger.error('WebSocket connection timeout');
             reject(new Error('WebSocket connection timeout'));
           }
         }, 10000); // 10s timeout
@@ -238,29 +286,63 @@ export class ConversationWebSocketService {
    * End the conversation
    */
   async endConversation(): Promise<void> {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      logger.warn('Cannot end conversation, WebSocket not connected');
+    if (!this.sessionId) {
+      logger.warn('No active conversation session to end');
       return;
     }
     
     try {
-      const message = {
-        type: WebSocketMessageType.CONVERSATION_END,
-        payload: {},
-        timestamp: Date.now(),
-        session_id: this.sessionId
-      };
+      // Get current session for authentication
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('Authentication required to end conversation');
+      }
       
-      this.ws.send(JSON.stringify(message));
-      logger.info('Conversation end message sent', { sessionId: this.sessionId });
+      // Try to end via REST API first (more reliable than WebSocket for final operations)
+      const response = await fetch(`${Config.ai.backendUserPortal}/api/conversation/end`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          session_id: this.sessionId
+        })
+      });
       
-      // Close the WebSocket after a short delay to ensure the message is sent
-      setTimeout(() => {
-        if (this.ws) {
-          this.ws.close();
-          this.ws = null;
-        }
-      }, 500);
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.warn('Failed to end conversation via REST API', {
+          status: response.status,
+          error: errorText
+        });
+      } else {
+        logger.info('Conversation ended via REST API', { sessionId: this.sessionId });
+      }
+      
+      // Also try to end via WebSocket if connected
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        const message = {
+          type: WebSocketMessageType.CONVERSATION_END,
+          payload: {},
+          timestamp: Date.now(),
+          session_id: this.sessionId
+        };
+        
+        this.ws.send(JSON.stringify(message));
+        logger.info('Conversation end message sent via WebSocket', { sessionId: this.sessionId });
+        
+        // Close the WebSocket after a short delay to ensure the message is sent
+        setTimeout(() => {
+          if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+          }
+        }, 500);
+      }
+      
+      // Reset session state
+      this.sessionId = null;
     } catch (error) {
       logger.error('Failed to end conversation', {
         error: error instanceof Error ? {
@@ -494,18 +576,23 @@ export class ConversationWebSocketService {
     }
     
     // Add medical conditions if available
-    if (profile.chronic_conditions && profile.chronic_conditions.length > 0) {
-      context += `Medical conditions: ${profile.chronic_conditions.join(', ')}. `;
+    if (profile.conditions_summary) {
+      context += `Medical conditions: ${profile.conditions_summary} `;
     }
     
     // Add medications if available
-    if (profile.medications && profile.medications.length > 0) {
-      context += `Current medications: ${profile.medications.join(', ')}. `;
+    if (profile.medications_summary) {
+      context += `Current medications: ${profile.medications_summary} `;
     }
     
     // Add allergies if available
-    if (profile.allergies && profile.allergies.length > 0) {
-      context += `Allergies: ${profile.allergies.join(', ')}. `;
+    if (profile.allergies_summary) {
+      context += `Allergies: ${profile.allergies_summary} `;
+    }
+    
+    // Add family history if available
+    if (profile.family_history) {
+      context += `Family history: ${profile.family_history} `;
     }
     
     return context;
