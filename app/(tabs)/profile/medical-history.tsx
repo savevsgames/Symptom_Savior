@@ -154,9 +154,17 @@ export default function MedicalHistory() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const { error } = await deleteCondition(conditionId);
-            if (error) {
-              Alert.alert('Error', 'Failed to delete condition. Please try again.');
+            try {
+              const { error } = await deleteCondition(conditionId);
+              if (error) {
+                logger.error('Failed to delete condition', { error, conditionId });
+                Alert.alert('Error', 'Failed to delete condition. Please try again.');
+              } else {
+                logger.info('Condition deleted successfully', { conditionId });
+              }
+            } catch (err) {
+              logger.error('Error in handleDeleteCondition', err);
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.');
             }
           },
         },
@@ -174,9 +182,17 @@ export default function MedicalHistory() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const { error } = await deleteMedication(medicationId);
-            if (error) {
-              Alert.alert('Error', 'Failed to delete medication. Please try again.');
+            try {
+              const { error } = await deleteMedication(medicationId);
+              if (error) {
+                logger.error('Failed to delete medication', { error, medicationId });
+                Alert.alert('Error', 'Failed to delete medication. Please try again.');
+              } else {
+                logger.info('Medication deleted successfully', { medicationId });
+              }
+            } catch (err) {
+              logger.error('Error in handleDeleteMedication', err);
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.');
             }
           },
         },
@@ -194,9 +210,17 @@ export default function MedicalHistory() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const { error } = await deleteAllergy(allergyId);
-            if (error) {
-              Alert.alert('Error', 'Failed to delete allergy. Please try again.');
+            try {
+              const { error } = await deleteAllergy(allergyId);
+              if (error) {
+                logger.error('Failed to delete allergy', { error, allergyId });
+                Alert.alert('Error', 'Failed to delete allergy. Please try again.');
+              } else {
+                logger.info('Allergy deleted successfully', { allergyId });
+              }
+            } catch (err) {
+              logger.error('Error in handleDeleteAllergy', err);
+              Alert.alert('Error', 'An unexpected error occurred. Please try again.');
             }
           },
         },
