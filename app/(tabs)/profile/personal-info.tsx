@@ -77,8 +77,7 @@ export default function PersonalInfo() {
         blood_type: bloodGroup || undefined,
         height_cm: heightCm ? parseFloat(heightCm) : undefined,
         weight_kg: weightKg ? parseFloat(weightKg) : undefined,
-        // Only include emergency_contact if the column exists in the database
-        ...(emergencyContact && { emergency_contact: emergencyContact }),
+        emergency_contact: emergencyContact,
       };
 
       const { data, error } = await createOrUpdateProfile(profileData);
