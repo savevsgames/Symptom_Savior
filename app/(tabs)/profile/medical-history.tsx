@@ -462,7 +462,7 @@ export default function MedicalHistory() {
         {/* Medical Conditions */}
         <BaseCard style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Heart size={20} color={theme.colors.error[500]} strokeWidth={2} />
+            <Heart size={20} color={theme.colors.primary[500]} strokeWidth={2} />
             <Text style={styles.sectionTitle}>Medical Conditions</Text>
             <BaseButton
               title={summarizing.conditions ? "Summarizing..." : "Generate Summary"}
@@ -759,7 +759,7 @@ export default function MedicalHistory() {
             <Text style={styles.summaryTitle}>Medical History Summary</Text>
             <View style={styles.summaryStats}>
               <View style={styles.summaryStatItem}>
-                <Heart size={16} color={theme.colors.error[500]} strokeWidth={2} />
+                <Heart size={16} color={theme.colors.primary[500]} strokeWidth={2} />
                 <Text style={styles.summaryStatNumber}>{conditions.length}</Text>
                 <Text style={styles.summaryStatLabel}>Conditions</Text>
               </View>
@@ -906,7 +906,7 @@ const styles = StyleSheet.create({
   },
   
   itemTag: {
-    backgroundColor: theme.colors.error[50],
+    backgroundColor: theme.colors.background.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -914,7 +914,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     borderRadius: theme.borderRadius.md,
     borderWidth: 1,
-    borderColor: theme.colors.error[200],
+    borderColor: theme.colors.border.medium,
   },
   
   medicationTag: {
@@ -934,7 +934,7 @@ const styles = StyleSheet.create({
   itemText: {
     fontFamily: theme.typography.fontFamily.medium,
     fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.error[700],
+    color: theme.colors.text.primary,
   },
   
   medicationText: {
