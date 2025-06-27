@@ -29,11 +29,9 @@ export interface UserMedicalProfile {
 
 export interface ProfileCondition {
   id: string;
-  user_id: string;
   profile_id: string;
   condition_name: string;
-  diagnosed_on?: string;
-  resolved_on?: string;
+  diagnosed_at?: string;
   severity?: number;
   notes?: string;
   created_at: string;
@@ -42,7 +40,6 @@ export interface ProfileCondition {
 
 export interface ProfileMedication {
   id: string;
-  user_id: string;
   profile_id: string;
   medication_name: string;
   dose?: string;
@@ -57,7 +54,6 @@ export interface ProfileMedication {
 
 export interface ProfileAllergy {
   id: string;
-  user_id: string;
   profile_id: string;
   allergen: string;
   reaction?: string;
@@ -84,8 +80,7 @@ interface CreateProfileData {
 
 interface CreateConditionData {
   condition_name: string;
-  diagnosed_on?: string;
-  resolved_on?: string;
+  diagnosed_at?: string;
   severity?: number;
   notes?: string;
 }
@@ -158,7 +153,6 @@ export function useProfile() {
       const { data, error: fetchError } = await supabase
         .from('profile_conditions')
         .select('*')
-        .eq('user_id', user.id)
         .eq('profile_id', profile.id)
         .order('created_at', { ascending: false });
 
@@ -183,7 +177,6 @@ export function useProfile() {
       const { data, error: fetchError } = await supabase
         .from('profile_medications')
         .select('*')
-        .eq('user_id', user.id)
         .eq('profile_id', profile.id)
         .order('created_at', { ascending: false });
 
@@ -208,7 +201,6 @@ export function useProfile() {
       const { data, error: fetchError } = await supabase
         .from('profile_allergies')
         .select('*')
-        .eq('user_id', user.id)
         .eq('profile_id', profile.id)
         .order('created_at', { ascending: false });
 
@@ -239,7 +231,8 @@ export function useProfile() {
         .single();
 
       if (upsertError) {
-        throw upsertError;
+        logger.error('Error saving profile:', upsertError);
+        return { data: null, error: upsertError };
       }
 
       logger.info('Profile saved successfully');
@@ -263,7 +256,6 @@ export function useProfile() {
       const { data, error: insertError } = await supabase
         .from('profile_conditions')
         .insert({
-          user_id: user.id,
           profile_id: profile.id,
           ...conditionData,
         })
@@ -295,7 +287,6 @@ export function useProfile() {
       const { data, error: insertError } = await supabase
         .from('profile_medications')
         .insert({
-          user_id: user.id,
           profile_id: profile.id,
           ...medicationData,
         })
@@ -327,7 +318,6 @@ export function useProfile() {
       const { data, error: insertError } = await supabase
         .from('profile_allergies')
         .insert({
-          user_id: user.id,
           profile_id: profile.id,
           ...allergyData,
         })
@@ -359,8 +349,7 @@ export function useProfile() {
       const { error: deleteError } = await supabase
         .from('profile_conditions')
         .delete()
-        .eq('id', conditionId)
-        .eq('user_id', user.id);
+        .eq('id', conditionId);
 
       if (deleteError) {
         throw deleteError;
@@ -387,8 +376,7 @@ export function useProfile() {
       const { error: deleteError } = await supabase
         .from('profile_medications')
         .delete()
-        .eq('id', medicationId)
-        .eq('user_id', user.id);
+        .eq('id', medicationId);
 
       if (deleteError) {
         throw deleteError;
@@ -415,8 +403,7 @@ export function useProfile() {
       const { error: deleteError } = await supabase
         .from('profile_allergies')
         .delete()
-        .eq('id', allergyId)
-        .eq('user_id', user.id);
+        .eq('id', allergyId);
 
       if (deleteError) {
         throw deleteError;
@@ -437,16 +424,17 @@ export function useProfile() {
   const getProfileCompletionPercentage = () => {
     if (!profile) return 0;
     
-    const fields = [
-      profile.full_name,
-      profile.date_of_birth,
-      profile.gender,
-      profile.height_cm,
-      profile.weight_kg,
+    // Define the sections that contribute to profile completion
+    const sections = [
+      { name: 'personal_info', isComplete: !!profile.full_name && !!profile.date_of_birth && !!profile.gender },
+      { name: 'conditions', isComplete: conditions.length > 0 },
+      { name: 'medications', isComplete: medications.length > 0 },
+      { name: 'allergies', isComplete: allergies.length > 0 }
     ];
     
-    const completedFields = fields.filter(field => field !== null && field !== undefined && field !== '').length;
-    return Math.round((completedFields / fields.length) * 100);
+    // Calculate completion percentage
+    const completedSections = sections.filter(section => section.isComplete).length;
+    return Math.round((completedSections / sections.length) * 100);
   };
 
   // Calculate age from date of birth

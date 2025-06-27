@@ -81,7 +81,7 @@ export default function PersonalInfo() {
         ...(emergencyContact && { emergency_contact: emergencyContact }),
       };
 
-      const { error } = await createOrUpdateProfile(profileData);
+      const { data, error } = await createOrUpdateProfile(profileData);
 
       if (error) {
         Alert.alert('Error', 'Failed to save personal information. Please try again.');

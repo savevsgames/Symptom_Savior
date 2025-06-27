@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { User, Heart, Pill, TriangleAlert as AlertTriangle, Settings, CircleHelp as HelpCircle, ChevronRight, Activity, Calendar, Stethoscope, Shield, FileText, LogOut } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -12,37 +12,42 @@ export default function Profile() {
   const { profile, conditions, medications, allergies, getProfileCompletionPercentage } = useProfile();
   const { user, signOut } = useAuthContext();
 
-  const profileStats = [
-    { label: 'Profile Complete', value: `${getProfileCompletionPercentage()}%`, icon: User },
-    { label: 'Conditions', value: conditions.length.toString(), icon: Heart },
-    { label: 'Medications', value: medications.length.toString(), icon: Pill },
-    { label: 'Allergies', value: allergies.length.toString(), icon: AlertTriangle },
+  const profileSections = [
+    { 
+      id: 'personal_info', 
+      title: 'Personal Information', 
+      icon: User, 
+      route: '/(tabs)/profile/personal-info',
+      description: 'Age, gender, physical measurements',
+      isComplete: profile && !!profile.full_name && !!profile.date_of_birth && !!profile.gender
+    },
+    { 
+      id: 'conditions', 
+      title: 'Medical Conditions', 
+      icon: Heart, 
+      route: '/(tabs)/profile/medical-history',
+      description: 'Chronic and ongoing health conditions',
+      isComplete: conditions.length > 0
+    },
+    { 
+      id: 'medications', 
+      title: 'Medications', 
+      icon: Pill, 
+      route: '/(tabs)/profile/medical-history',
+      description: 'Current and past medications',
+      isComplete: medications.length > 0
+    },
+    { 
+      id: 'allergies', 
+      title: 'Allergies', 
+      icon: AlertTriangle, 
+      route: '/(tabs)/profile/medical-history',
+      description: 'Known allergies and reactions',
+      isComplete: allergies.length > 0
+    }
   ];
 
   const menuSections = [
-    {
-      title: 'Health Profile',
-      items: [
-        { 
-          icon: User, 
-          label: 'Personal Information', 
-          subtitle: 'Age, gender, physical measurements',
-          route: '/(tabs)/profile/personal-info'
-        },
-        { 
-          icon: Heart, 
-          label: 'Medical History', 
-          subtitle: 'Conditions, medications, allergies',
-          route: '/(tabs)/profile/medical-history'
-        },
-        { 
-          icon: FileText, 
-          label: 'Export Health Data', 
-          subtitle: 'Download your health information',
-          route: null // TODO: Implement in future
-        },
-      ]
-    },
     {
       title: 'App Settings',
       items: [
@@ -105,6 +110,8 @@ export default function Profile() {
     return user?.email || 'No email';
   };
 
+  const completionPercentage = getProfileCompletionPercentage();
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -127,40 +134,110 @@ export default function Profile() {
           </View>
         </View>
 
-        {/* Profile Completion */}
-        {getProfileCompletionPercentage() < 100 && (
-          <BaseCard style={styles.completionCard}>
-            <View style={styles.completionHeader}>
-              <Text style={styles.completionTitle}>Complete Your Profile</Text>
-              <Text style={styles.completionPercentage}>{getProfileCompletionPercentage()}%</Text>
-            </View>
-            <View style={styles.progressBar}>
+        {/* Profile Completion Progress */}
+        <BaseCard style={styles.progressCard}>
+          <Text style={styles.progressTitle}>Complete Your Health Profile</Text>
+          
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBarContainer}>
+              <View style={styles.progressBackground} />
               <View 
                 style={[
                   styles.progressFill, 
-                  { width: `${getProfileCompletionPercentage()}%` }
+                  { width: `${completionPercentage}%` }
                 ]} 
               />
-            </View>
-            <Text style={styles.completionSubtitle}>
-              Complete your profile to get more personalized health insights
-            </Text>
-          </BaseCard>
-        )}
-
-        {/* Stats */}
-        <View style={styles.statsContainer}>
-          <Text style={styles.sectionTitle}>Your Health Profile</Text>
-          <View style={styles.statsGrid}>
-            {profileStats.map((stat, index) => (
-              <View key={index} style={styles.statCard}>
-                <View style={styles.statIconContainer}>
-                  <stat.icon size={20} color="#0066CC" strokeWidth={2} />
-                </View>
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
+              <View style={styles.progressMilestones}>
+                {profileSections.map((section, index) => (
+                  <View 
+                    key={section.id} 
+                    style={[
+                      styles.milestone, 
+                      { left: `${(index / (profileSections.length - 1)) * 100}%` },
+                      section.isComplete ? styles.milestoneComplete : {}
+                    ]}
+                  />
+                ))}
               </View>
+            </View>
+            <Text style={styles.progressPercentage}>{completionPercentage}% Complete</Text>
+          </View>
+          
+          <Text style={styles.progressSubtitle}>
+            Complete your profile to get more personalized health insights
+          </Text>
+        </BaseCard>
+
+        {/* Profile Sections */}
+        <View style={styles.profileSectionsContainer}>
+          <Text style={styles.sectionTitle}>Health Profile</Text>
+          
+          <View style={styles.sectionsGrid}>
+            {profileSections.map((section) => (
+              <TouchableOpacity
+                key={section.id}
+                style={[
+                  styles.sectionCard,
+                  section.isComplete ? styles.sectionCardComplete : {}
+                ]}
+                onPress={() => router.push(section.route as any)}
+              >
+                <View style={[
+                  styles.sectionIconContainer,
+                  section.isComplete ? styles.sectionIconContainerComplete : {}
+                ]}>
+                  <section.icon 
+                    size={24} 
+                    color={section.isComplete ? theme.colors.success[500] : theme.colors.primary[500]} 
+                    strokeWidth={2} 
+                  />
+                  {section.isComplete && (
+                    <View style={styles.completeBadge} />
+                  )}
+                </View>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+                <Text style={styles.sectionDescription}>{section.description}</Text>
+                <View style={styles.sectionStatus}>
+                  <Text style={[
+                    styles.sectionStatusText,
+                    section.isComplete ? styles.sectionStatusTextComplete : {}
+                  ]}>
+                    {section.isComplete ? 'Completed' : 'Incomplete'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
             ))}
+          </View>
+        </View>
+
+        {/* Health Insights */}
+        <View style={styles.insightsSection}>
+          <Text style={styles.sectionTitle}>Health Insights</Text>
+          <View style={styles.insightCard}>
+            <View style={styles.insightHeader}>
+              <Activity size={20} color="#10B981" strokeWidth={2} />
+              <Text style={styles.insightTitle}>Profile Summary</Text>
+            </View>
+            <Text style={styles.insightText}>
+              {completionPercentage === 100 
+                ? "Your health profile is complete! This helps provide more accurate and personalized health guidance from your AI assistant."
+                : `Your profile is ${completionPercentage}% complete. Adding more information helps provide better health insights and emergency preparedness.`
+              }
+            </Text>
+            {completionPercentage < 100 && (
+              <TouchableOpacity 
+                style={styles.insightButton}
+                onPress={() => {
+                  // Find the first incomplete section and navigate to it
+                  const firstIncomplete = profileSections.find(section => !section.isComplete);
+                  if (firstIncomplete) {
+                    router.push(firstIncomplete.route as any);
+                  }
+                }}
+              >
+                <Text style={styles.insightButtonText}>Complete Profile</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -196,31 +273,6 @@ export default function Profile() {
           </View>
         ))}
 
-        {/* Health Insights */}
-        <View style={styles.insightsSection}>
-          <Text style={styles.sectionTitle}>Health Insights</Text>
-          <View style={styles.insightCard}>
-            <View style={styles.insightHeader}>
-              <Activity size={20} color="#10B981" strokeWidth={2} />
-              <Text style={styles.insightTitle}>Profile Summary</Text>
-            </View>
-            <Text style={styles.insightText}>
-              {getProfileCompletionPercentage() === 100 
-                ? "Your health profile is complete! This helps provide more accurate and personalized health guidance from your AI assistant."
-                : `Your profile is ${getProfileCompletionPercentage()}% complete. Adding more information helps provide better health insights and emergency preparedness.`
-              }
-            </Text>
-            {getProfileCompletionPercentage() < 100 && (
-              <TouchableOpacity 
-                style={styles.insightButton}
-                onPress={() => router.push('/(tabs)/profile/personal-info')}
-              >
-                <Text style={styles.insightButtonText}>Complete Profile</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
         {/* Sign Out */}
         <View style={styles.signOutSection}>
           <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
@@ -232,7 +284,7 @@ export default function Profile() {
         {/* App Info */}
         <View style={styles.appInfo}>
           <Text style={styles.appVersion}>Symptom Savior v1.0.0</Text>
-          <Text style={styles.appBuild}>Build 2024.12.21</Text>
+          <Text style={styles.appBuild}>Build 2025.12.21</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -284,84 +336,198 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#94A3B8',
   },
-  completionCard: {
+  progressCard: {
     marginHorizontal: 24,
     marginTop: 16,
-    backgroundColor: theme.colors.primary[50],
-    borderWidth: 1,
-    borderColor: theme.colors.primary[200],
+    backgroundColor: theme.colors.background.primary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    ...theme.shadows.md,
   },
-  completionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  completionTitle: {
+  progressTitle: {
     fontFamily: theme.typography.fontFamily.semiBold,
     fontSize: theme.typography.fontSize.base,
-    color: theme.colors.primary[700],
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.md,
+    textAlign: 'center',
   },
-  completionPercentage: {
+  progressContainer: {
+    marginVertical: theme.spacing.md,
+  },
+  progressBarContainer: {
+    height: 12,
+    borderRadius: 6,
+    marginBottom: theme.spacing.sm,
+    position: 'relative',
+  },
+  progressBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: theme.colors.neutral[200],
+    borderRadius: 6,
+  },
+  progressFill: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    height: '100%',
+    backgroundColor: theme.colors.primary[500],
+    borderRadius: 6,
+    zIndex: 1,
+  },
+  progressMilestones: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    zIndex: 2,
+  },
+  milestone: {
+    position: 'absolute',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: theme.colors.background.primary,
+    borderWidth: 2,
+    borderColor: theme.colors.neutral[300],
+    top: -2,
+    marginLeft: -8,
+    zIndex: 3,
+  },
+  milestoneComplete: {
+    backgroundColor: theme.colors.success[500],
+    borderColor: theme.colors.success[500],
+  },
+  progressPercentage: {
     fontFamily: theme.typography.fontFamily.bold,
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.primary[600],
+    textAlign: 'center',
+    marginTop: theme.spacing.sm,
   },
-  progressBar: {
-    height: 8,
-    backgroundColor: theme.colors.primary[100],
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: theme.colors.primary[500],
-    borderRadius: 4,
-  },
-  completionSubtitle: {
+  progressSubtitle: {
     fontFamily: theme.typography.fontFamily.regular,
     fontSize: theme.typography.fontSize.sm,
-    color: theme.colors.primary[600],
+    color: theme.colors.text.secondary,
+    textAlign: 'center',
   },
-  statsContainer: {
+  profileSectionsContainer: {
     paddingHorizontal: 24,
     paddingVertical: 20,
   },
-  sectionTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 18,
-    color: '#1E293B',
-    marginBottom: 16,
-  },
-  statsGrid: {
+  sectionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginHorizontal: -8,
   },
-  statCard: {
-    backgroundColor: '#FFFFFF',
-    flex: 1,
+  sectionCard: {
+    width: '48%',
+    backgroundColor: theme.colors.background.primary,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.lg,
+    marginBottom: theme.spacing.lg,
+    marginHorizontal: 4,
+    ...theme.shadows.sm,
+    borderWidth: 1,
+    borderColor: theme.colors.border.light,
+  },
+  sectionCardComplete: {
+    borderColor: theme.colors.success[300],
+    backgroundColor: theme.colors.success[50],
+  },
+  sectionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: theme.colors.primary[50],
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+    justifyContent: 'center',
+    marginBottom: theme.spacing.md,
+    position: 'relative',
+  },
+  sectionIconContainerComplete: {
+    backgroundColor: theme.colors.success[50],
+  },
+  completeBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: theme.colors.success[500],
+    borderWidth: 2,
+    borderColor: theme.colors.background.primary,
+  },
+  sectionTitle: {
+    fontFamily: theme.typography.fontFamily.semiBold,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.text.primary,
+    marginBottom: theme.spacing.xs,
+  },
+  sectionDescription: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.sm,
+  },
+  sectionStatus: {
+    marginTop: 'auto',
+  },
+  sectionStatusText: {
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.xs,
+    color: theme.colors.text.tertiary,
+  },
+  sectionStatusTextComplete: {
+    color: theme.colors.success[600],
+  },
+  insightsSection: {
+    paddingHorizontal: 24,
+    marginBottom: 24,
+  },
+  insightCard: {
+    backgroundColor: theme.colors.success[50],
+    padding: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginHorizontal: 4,
+    borderColor: theme.colors.success[200],
   },
-  statIconContainer: {
+  insightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  statValue: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 20,
-    color: '#0066CC',
-    marginBottom: 4,
+  insightTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: '#166534',
+    marginLeft: 8,
   },
-  statLabel: {
+  insightText: {
     fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: '#166534',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  insightButton: {
+    backgroundColor: '#10B981',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  insightButtonText: {
+    fontFamily: 'Inter-Medium',
     fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
+    color: '#FFFFFF',
   },
   menuSection: {
     paddingHorizontal: 24,
@@ -403,47 +569,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     fontSize: 12,
     color: '#64748B',
-  },
-  insightsSection: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  insightCard: {
-    backgroundColor: '#F0FDF4',
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  insightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  insightTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 16,
-    color: '#166534',
-    marginLeft: 8,
-  },
-  insightText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: '#166534',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  insightButton: {
-    backgroundColor: '#10B981',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  insightButtonText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 12,
-    color: '#FFFFFF',
   },
   signOutSection: {
     paddingHorizontal: 24,
