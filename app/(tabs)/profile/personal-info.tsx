@@ -77,11 +77,10 @@ export default function PersonalInfo() {
         blood_type: bloodGroup || undefined,
         height_cm: heightCm ? parseFloat(heightCm) : undefined,
         weight_kg: weightKg ? parseFloat(weightKg) : undefined,
-        // Only include emergency_contact if the column exists in the database
-        ...(emergencyContact && { emergency_contact: emergencyContact }),
+        emergency_contact: emergencyContact,
       };
 
-      const { error } = await createOrUpdateProfile(profileData);
+      const { data, error } = await createOrUpdateProfile(profileData);
 
       if (error) {
         Alert.alert('Error', 'Failed to save personal information. Please try again.');

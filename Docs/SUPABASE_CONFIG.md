@@ -137,13 +137,14 @@ CREATE TABLE user_medical_profiles (
   full_name        text,
   date_of_birth    date,
   gender           gender_type,
-  blood_group      blood_type,
+  blood_group      blood_type DEFAULT 'unknown',
   height_cm        numeric,
   weight_kg        numeric,
   emergency_contact jsonb DEFAULT '{}'::jsonb,
-  medications      jsonb DEFAULT '[]'::jsonb,
-  chronic_conditions jsonb DEFAULT '[]'::jsonb,
-  allergies        jsonb DEFAULT '[]'::jsonb,
+  conditions_summary text,
+  medications_summary text,
+  allergies_summary text,
+  family_history    text,
   created_at       timestamptz NOT NULL DEFAULT now(),
   updated_at       timestamptz NOT NULL DEFAULT now()
 );
@@ -173,9 +174,10 @@ CREATE TYPE blood_type AS ENUM (
 - `blood_group`: Important for emergency situations
 - `height_cm`/`weight_kg`: For BMI and dosage calculations
 - `emergency_contact`: JSONB containing emergency contact information
-- `medications`: JSONB array of current medications (quick reference)
-- `chronic_conditions`: JSONB array of ongoing health conditions
-- `allergies`: JSONB array of known allergies
+- `conditions_summary`: Summarized text of medical conditions
+- `medications_summary`: Summarized text of current medications
+- `allergies_summary`: Summarized text of known allergies
+- `family_history`: Family medical history information
 
 **RLS Policy**: Users can only access their own profile
 ```sql
@@ -194,20 +196,20 @@ To maintain relational integrity while keeping the main profile table manageable
 ```sql
 CREATE TABLE profile_conditions (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   profile_id uuid NOT NULL REFERENCES user_medical_profiles(id) ON DELETE CASCADE,
   condition_name text NOT NULL,
-  diagnosed_on date,
-  resolved_on date,
+  diagnosed_at date,
   severity int CHECK (severity BETWEEN 1 AND 10),
+  ongoing boolean DEFAULT true,
   notes text,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE
 );
 ```
 
 **Key Features**:
-- Links to both user and profile for data integrity
+- Links to profile for data integrity
 - Tracks condition lifecycle (diagnosis to resolution)
 - Severity scoring for condition impact assessment
 - Detailed notes for additional context
@@ -219,17 +221,18 @@ CREATE TABLE profile_conditions (
 ```sql
 CREATE TABLE profile_medications (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   profile_id uuid NOT NULL REFERENCES user_medical_profiles(id) ON DELETE CASCADE,
   medication_name text NOT NULL,
-  dose text,
+  dosage text,
   frequency text,
-  started_on date,
-  stopped_on date,
-  prescribing_doctor text,
+  start_date date,
+  end_date date,
+  prescribed_by text,
+  is_current boolean DEFAULT true,
   notes text,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE
 );
 ```
 
@@ -237,7 +240,7 @@ CREATE TABLE profile_medications (
 - Complete medication lifecycle tracking
 - Dosage and frequency information
 - Prescribing physician tracking
-- Start/stop dates for medication history
+- Start/end dates for medication history
 
 ### 7. `profile_allergies` - Detailed Allergy Tracking
 
@@ -246,15 +249,15 @@ CREATE TABLE profile_medications (
 ```sql
 CREATE TABLE profile_allergies (
   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   profile_id uuid NOT NULL REFERENCES user_medical_profiles(id) ON DELETE CASCADE,
   allergen text NOT NULL,
   reaction text,
   severity int CHECK (severity BETWEEN 1 AND 10),
   discovered_on date,
   notes text,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  user_id uuid NOT NULL DEFAULT auth.uid() REFERENCES auth.users(id) ON DELETE CASCADE
 );
 ```
 
@@ -266,15 +269,21 @@ CREATE TABLE profile_allergies (
 
 **RLS Policies for Satellite Tables**:
 ```sql
--- All satellite tables use the same owner-only policy
-CREATE POLICY "profile_conditions_owner" ON profile_conditions
-  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+-- All satellite tables use profile-based access control
+CREATE POLICY "conditions_owner" ON profile_conditions
+  FOR ALL
+  USING (auth.uid() = (SELECT user_id FROM user_medical_profiles WHERE id = profile_id))
+  WITH CHECK (auth.uid() = (SELECT user_id FROM user_medical_profiles WHERE id = profile_id));
 
-CREATE POLICY "profile_medications_owner" ON profile_medications
-  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "medications_owner" ON profile_medications
+  FOR ALL
+  USING (auth.uid() = (SELECT user_id FROM user_medical_profiles WHERE id = profile_id))
+  WITH CHECK (auth.uid() = (SELECT user_id FROM user_medical_profiles WHERE id = profile_id));
 
-CREATE POLICY "profile_allergies_owner" ON profile_allergies
-  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "allergies_owner" ON profile_allergies
+  FOR ALL
+  USING (auth.uid() = (SELECT user_id FROM user_medical_profiles WHERE id = profile_id))
+  WITH CHECK (auth.uid() = (SELECT user_id FROM user_medical_profiles WHERE id = profile_id));
 ```
 
 ## Relationship Tables (Bridge Tables)
@@ -345,7 +354,7 @@ CREATE POLICY "link_visit_treat" ON visit_treatments
   );
 ```
 
-## Existing Tables (From Original Schema)
+## AI Integration Tables
 
 ### 11. `documents` - Medical Document Storage
 
@@ -402,6 +411,140 @@ CREATE TABLE embedding_jobs (
 );
 ```
 
+### 14. `medical_consultations` - AI Interaction Logging
+
+**Purpose**: Record all AI medical consultations for history and analysis.
+
+```sql
+CREATE TABLE medical_consultations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  session_id text NOT NULL,
+  query text NOT NULL,
+  response text NOT NULL,
+  sources jsonb,
+  voice_audio_url text,
+  video_url text,
+  consultation_type text NOT NULL,
+  processing_time integer,
+  emergency_detected boolean,
+  context_used jsonb,
+  confidence_score numeric,
+  recommendations jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+```
+
+### 15. `conversation_sessions` - Conversation Management
+
+**Purpose**: Manage ongoing AI conversation sessions with history and context.
+
+```sql
+CREATE TABLE conversation_sessions (
+  id text PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  medical_profile jsonb DEFAULT '{}'::jsonb,
+  conversation_history jsonb DEFAULT '[]'::jsonb,
+  status text DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'paused'::text, 'ended'::text])),
+  session_metadata jsonb DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  ended_at timestamptz
+);
+```
+
+## Testing Infrastructure Tables
+
+These tables support the automated testing infrastructure for the application:
+
+### 16. `test_runs` - Test Execution Tracking
+
+**Purpose**: Track automated test runs against the application.
+
+```sql
+CREATE TABLE test_runs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  trigger_type varchar(50) NOT NULL,
+  environment varchar(50) NOT NULL,
+  target_url text NOT NULL,
+  commit_sha varchar(40),
+  started_at timestamptz DEFAULT now(),
+  completed_at timestamptz,
+  status varchar(20) DEFAULT 'running',
+  total_tests integer DEFAULT 0,
+  passed_tests integer DEFAULT 0,
+  failed_tests integer DEFAULT 0,
+  skipped_tests integer DEFAULT 0
+);
+```
+
+### 17. `test_results` - Individual Test Results
+
+**Purpose**: Store detailed results for each test case.
+
+```sql
+CREATE TABLE test_results (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  test_run_id uuid REFERENCES test_runs(id) ON DELETE CASCADE,
+  test_suite varchar(100) NOT NULL,
+  test_name varchar(200) NOT NULL,
+  status varchar(20) NOT NULL,
+  duration_ms integer,
+  error_message text,
+  screenshot_url text,
+  created_at timestamptz DEFAULT now()
+);
+```
+
+### 18. `performance_metrics` - Performance Monitoring
+
+**Purpose**: Track application performance metrics over time.
+
+```sql
+CREATE TABLE performance_metrics (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  test_run_id uuid REFERENCES test_runs(id) ON DELETE CASCADE,
+  metric_name varchar(100) NOT NULL,
+  metric_value numeric,
+  metric_unit varchar(20),
+  page_url text,
+  created_at timestamptz DEFAULT now()
+);
+```
+
+### 19. `test_suites` - Test Suite Configuration
+
+**Purpose**: Define test suites and their configuration.
+
+```sql
+CREATE TABLE test_suites (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  description text,
+  enabled boolean DEFAULT true,
+  test_count integer DEFAULT 0,
+  last_run_at timestamptz,
+  average_duration_ms integer DEFAULT 0,
+  success_rate numeric DEFAULT 0,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+```
+
+### 20. `testing_admin_users` - Testing Administration
+
+**Purpose**: Define users with testing administration privileges.
+
+```sql
+CREATE TABLE testing_admin_users (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email text NOT NULL UNIQUE,
+  added_at timestamptz DEFAULT now()
+);
+```
+
 ## Performance Indexes
 
 ```sql
@@ -412,108 +555,24 @@ CREATE INDEX ON doctor_visits (user_id, visit_ts);
 
 -- Profile and satellite table indexes
 CREATE INDEX ON user_medical_profiles (user_id);
-CREATE INDEX ON profile_conditions (user_id, profile_id);
-CREATE INDEX ON profile_medications (user_id, profile_id);
-CREATE INDEX ON profile_allergies (user_id, profile_id);
+CREATE INDEX ON profile_conditions (profile_id);
+CREATE INDEX ON profile_medications (profile_id);
+CREATE INDEX ON profile_allergies (profile_id);
 
--- Existing document indexes
+-- AI integration indexes
 CREATE INDEX documents_user_id_idx ON documents (user_id);
 CREATE INDEX documents_embedding_idx ON documents USING ivfflat (embedding vector_cosine_ops);
 CREATE INDEX documents_created_at_idx ON documents (created_at);
+CREATE INDEX medical_consultations_user_id_idx ON medical_consultations (user_id);
+CREATE INDEX medical_consultations_created_at_idx ON medical_consultations (created_at DESC);
+CREATE INDEX conversation_sessions_user_id_idx ON conversation_sessions (user_id);
+CREATE INDEX conversation_sessions_status_idx ON conversation_sessions (status);
+
+-- Testing infrastructure indexes
+CREATE INDEX test_runs_user_id_idx ON test_runs (user_id);
+CREATE INDEX test_runs_status_idx ON test_runs (status);
+CREATE INDEX test_results_test_run_id_idx ON test_results (test_run_id);
 ```
-
-## Sample Queries for TxAgent Context
-
-### Get Complete User Health Profile
-
-```sql
--- Get user's basic profile information
-SELECT 
-  p.*,
-  EXTRACT(YEAR FROM AGE(p.date_of_birth)) as age
-FROM user_medical_profiles p
-WHERE p.user_id = auth.uid();
-```
-
-### Get Active Health Conditions and Medications
-
-```sql
--- Get current active conditions and medications
-SELECT 
-  'condition' as type,
-  pc.condition_name as name,
-  pc.severity,
-  pc.diagnosed_on as start_date,
-  pc.notes
-FROM profile_conditions pc
-WHERE pc.user_id = auth.uid() 
-  AND pc.resolved_on IS NULL
-
-UNION ALL
-
-SELECT 
-  'medication' as type,
-  pm.medication_name as name,
-  NULL as severity,
-  pm.started_on as start_date,
-  CONCAT(pm.dose, ' - ', pm.frequency) as notes
-FROM profile_medications pm
-WHERE pm.user_id = auth.uid() 
-  AND pm.stopped_on IS NULL
-
-ORDER BY start_date DESC;
-```
-
-### Get Recent Health Context for AI Consultation
-
-```sql
--- Comprehensive recent health context
-SELECT 
-  s.symptom_name,
-  s.severity,
-  s.triggers,
-  s.location,
-  s.created_at,
-  array_agg(DISTINCT pc.condition_name) FILTER (WHERE pc.condition_name IS NOT NULL) as conditions,
-  array_agg(DISTINCT pm.medication_name) FILTER (WHERE pm.medication_name IS NOT NULL) as medications,
-  array_agg(DISTINCT pa.allergen) FILTER (WHERE pa.allergen IS NOT NULL) as allergies
-FROM user_symptoms s
-LEFT JOIN profile_conditions pc ON pc.user_id = s.user_id AND pc.resolved_on IS NULL
-LEFT JOIN profile_medications pm ON pm.user_id = s.user_id AND pm.stopped_on IS NULL  
-LEFT JOIN profile_allergies pa ON pa.user_id = s.user_id
-WHERE s.user_id = auth.uid()
-  AND s.created_at >= now() - interval '30 days'
-GROUP BY s.id, s.symptom_name, s.severity, s.triggers, s.location, s.created_at
-ORDER BY s.created_at DESC;
-```
-
-### Get Symptom-Treatment Effectiveness Analysis
-
-```sql
--- Analyze treatment effectiveness for symptoms
-SELECT 
-  s.symptom_name,
-  t.name as treatment_name,
-  t.treatment_type,
-  COUNT(*) as usage_count,
-  AVG(s.severity) as avg_severity_when_used
-FROM user_symptoms s
-JOIN symptom_treatments st ON s.id = st.symptom_id
-JOIN treatments t ON st.treatment_id = t.id
-WHERE s.user_id = auth.uid()
-  AND s.created_at >= now() - interval '90 days'
-GROUP BY s.symptom_name, t.name, t.treatment_type
-ORDER BY usage_count DESC, avg_severity_when_used ASC;
-```
-
-## Row Level Security (RLS) Summary
-
-All tables implement comprehensive RLS policies:
-
-1. **Owner-Only Access**: Users can only access their own data
-2. **Bridge Table Security**: Relationship tables require ownership of both linked entities
-3. **Service Role Bypass**: Service roles can access data for system operations
-4. **JWT-Based Authentication**: All policies use `auth.uid()` for user identification
 
 ## TxAgent Integration Guidelines
 
