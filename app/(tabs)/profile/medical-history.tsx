@@ -257,8 +257,8 @@ export default function MedicalHistory() {
         throw new Error('Authentication required');
       }
 
-      // Call the summarize-conditions API
-      const response = await fetch('/api/profile/summarize-conditions', {
+      // Call the summarize-conditions API - FIXED: Changed from /api/profile/ to /api/medical-profile/
+      const response = await fetch('/api/medical-profile/summarize-conditions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -307,8 +307,8 @@ export default function MedicalHistory() {
         throw new Error('Authentication required');
       }
 
-      // Call the summarize-medications API
-      const response = await fetch('/api/profile/summarize-medications', {
+      // Call the summarize-medications API - FIXED: Changed from /api/profile/ to /api/medical-profile/
+      const response = await fetch('/api/medical-profile/summarize-medications', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -357,8 +357,8 @@ export default function MedicalHistory() {
         throw new Error('Authentication required');
       }
 
-      // Call the summarize-allergies API
-      const response = await fetch('/api/profile/summarize-allergies', {
+      // Call the summarize-allergies API - FIXED: Changed from /api/profile/ to /api/medical-profile/
+      const response = await fetch('/api/medical-profile/summarize-allergies', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -407,8 +407,8 @@ export default function MedicalHistory() {
         throw new Error('Authentication required');
       }
 
-      // Call the summarize-family-history API
-      const response = await fetch('/api/profile/summarize-family-history', {
+      // Call the summarize-family-history API - FIXED: Changed from /api/profile/ to /api/medical-profile/
+      const response = await fetch('/api/medical-profile/summarize-family-history', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
