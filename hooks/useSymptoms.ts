@@ -223,6 +223,35 @@ export function useSymptoms() {
     }
   };
 
+  const getSymptomsByName = async (symptomName: string) => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('user_symptoms')
+        .select('*')
+        .eq('user_id', user.id)
+        .ilike('symptom_name', `%${symptomName}%`)
+        .order('created_at', { ascending: false });
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      logger.debug('Symptoms fetched by name successfully', { 
+        symptomName, 
+        count: data?.length || 0 
+      });
+      
+      return { data, error: null };
+    } catch (err) {
+      logger.error('Error fetching symptoms by name:', err);
+      return { data: null, error: err };
+    }
+  };
+
   const addTreatment = async (treatmentData: AddTreatmentData) => {
     if (!user) {
       throw new Error('User not authenticated');
@@ -450,6 +479,7 @@ export function useSymptoms() {
     updateSymptom,
     deleteSymptom,
     getSymptomById,
+    getSymptomsByName,
     
     // Treatments
     treatments,

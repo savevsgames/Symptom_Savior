@@ -13,6 +13,8 @@ import { ttsService } from '@/lib/tts';
 import { Config } from '@/lib/config';
 import { logger } from '@/utils/logger';
 import { BaseButton } from '@/components/ui';
+import { detectSymptomLoggingIntent, type IntentDetectionResult, type ExtractedSymptomData, formatSymptomData } from '@/lib/intent-detection';
+import { SymptomConfirmationCard } from '@/components/symptom/SymptomConfirmationCard';
 
 interface Message {
   id: string;
@@ -43,11 +45,13 @@ export default function Assistant() {
   const [contextInitialized, setContextInitialized] = useState(false);
   const [sessionId, setSessionId] = useState<string>(`session_${Date.now()}`);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [pendingSymptom, setPendingSymptom] = useState<ExtractedSymptomData | null>(null);
+  const [savingSymptom, setSavingSymptom] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Get user profile and health data
   const { profile, conditions, medications, allergies } = useProfile();
-  const { symptoms, treatments, doctorVisits } = useSymptoms();
+  const { symptoms, treatments, doctorVisits, addSymptom, getSymptomsByName } = useSymptoms();
 
   const quickPrompts = [
     "How do I log a new symptom?",
@@ -80,22 +84,22 @@ export default function Assistant() {
         full_name: profile.full_name,
         age: profile.date_of_birth ? calculateAge(profile.date_of_birth) : null,
         gender: profile.gender,
-        blood_group: profile.blood_group,
+        blood_group: profile.blood_type,
         height_cm: profile.height_cm,
         weight_kg: profile.weight_kg,
       },
       medical_conditions: conditions.map(c => ({
         name: c.condition_name,
         severity: c.severity,
-        diagnosed_on: c.diagnosed_on,
+        diagnosed_on: c.diagnosed_at,
         notes: c.notes,
       })),
       current_medications: medications.map(m => ({
         name: m.medication_name,
-        dose: m.dose,
+        dose: m.dosage,
         frequency: m.frequency,
-        started_on: m.started_on,
-        prescribing_doctor: m.prescribing_doctor,
+        started_on: m.start_date,
+        prescribing_doctor: m.prescribed_by,
       })),
       allergies: allergies.map(a => ({
         allergen: a.allergen,
@@ -137,6 +141,50 @@ export default function Assistant() {
     setIsTyping(true);
 
     try {
+      // Check for symptom logging intent
+      const intentResult = detectSymptomLoggingIntent(textToSend);
+      
+      if (intentResult.intent === 'symptom_logging' && intentResult.confidence > 0.6 && intentResult.extractedData) {
+        // We detected a symptom logging intent with reasonable confidence
+        if (intentResult.extractedData.symptom_name && intentResult.extractedData.severity) {
+          // We have enough information to log the symptom
+          setPendingSymptom(intentResult.extractedData);
+          setIsTyping(false);
+          return;
+        } else if (intentResult.extractedData.symptom_name) {
+          // We have a symptom name but missing other details
+          // Ask for more information
+          const botResponse: Message = {
+            id: (Date.now() + 1).toString(),
+            text: `I see you want to log a symptom for "${intentResult.extractedData.symptom_name}". Could you tell me how severe it is on a scale of 1-10, and any other details like location or triggers?`,
+            isBot: true,
+            timestamp: new Date(),
+          };
+          
+          setMessages(prev => [...prev, botResponse]);
+          setIsTyping(false);
+          return;
+        } else {
+          // We detected intent but don't have enough details
+          const botResponse: Message = {
+            id: (Date.now() + 1).toString(),
+            text: "I'd be happy to help you log a symptom. Could you tell me what symptom you're experiencing and how severe it is on a scale of 1-10?",
+            isBot: true,
+            timestamp: new Date(),
+          };
+          
+          setMessages(prev => [...prev, botResponse]);
+          setIsTyping(false);
+          return;
+        }
+      }
+      
+      // Check for symptom history intent
+      if (intentResult.intent === 'symptom_history') {
+        await handleSymptomHistoryRequest(intentResult.symptomName);
+        return;
+      }
+
       // Build context for personalized responses
       const shouldUseContext = profile && (!contextInitialized || 
         textToSend.toLowerCase().includes('my') || 
@@ -259,6 +307,193 @@ export default function Assistant() {
     } finally {
       setIsTyping(false);
     }
+  };
+
+  const handleSymptomHistoryRequest = async (symptomName?: string) => {
+    try {
+      let historyResponse: Message;
+      
+      if (symptomName) {
+        // Get history for a specific symptom
+        const { data, error } = await getSymptomsByName(symptomName);
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data && data.length > 0) {
+          const count = data.length;
+          const latestDate = new Date(data[0].created_at).toLocaleDateString();
+          const avgSeverity = (data.reduce((sum, s) => sum + s.severity, 0) / count).toFixed(1);
+          
+          historyResponse = {
+            id: (Date.now() + 1).toString(),
+            text: `I found ${count} records of "${symptomName}" in your history. The most recent was on ${latestDate} with an average severity of ${avgSeverity}/10.`,
+            isBot: true,
+            timestamp: new Date(),
+          };
+        } else {
+          historyResponse = {
+            id: (Date.now() + 1).toString(),
+            text: `I couldn't find any records for "${symptomName}" in your symptom history. Would you like to log this symptom now?`,
+            isBot: true,
+            timestamp: new Date(),
+          };
+        }
+      } else {
+        // Get general symptom history
+        if (symptoms.length === 0) {
+          historyResponse = {
+            id: (Date.now() + 1).toString(),
+            text: "You haven't logged any symptoms yet. Would you like to log a symptom now?",
+            isBot: true,
+            timestamp: new Date(),
+          };
+        } else {
+          const recentSymptoms = symptoms.slice(0, 5);
+          const totalCount = symptoms.length;
+          
+          let summaryText = `You've logged ${totalCount} symptom${totalCount !== 1 ? 's' : ''} in total. `;
+          summaryText += `Your most recent symptoms are: `;
+          
+          recentSymptoms.forEach((s, index) => {
+            summaryText += `${s.symptom} (severity: ${s.severity}/10)`;
+            if (index < recentSymptoms.length - 1) {
+              summaryText += index === recentSymptoms.length - 2 ? ' and ' : ', ';
+            }
+          });
+          
+          historyResponse = {
+            id: (Date.now() + 1).toString(),
+            text: summaryText,
+            isBot: true,
+            timestamp: new Date(),
+          };
+        }
+      }
+      
+      setMessages(prev => [...prev, historyResponse]);
+    } catch (error) {
+      logger.error('Failed to retrieve symptom history', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        symptomName
+      });
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm sorry, I had trouble retrieving your symptom history. Please try again later or check the Symptoms tab to view your history.",
+        isBot: true,
+        timestamp: new Date(),
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleConfirmSymptom = async () => {
+    if (!pendingSymptom || !pendingSymptom.symptom_name) return;
+    
+    try {
+      setSavingSymptom(true);
+      
+      // Prepare symptom data for saving
+      const symptomData = {
+        symptom_name: pendingSymptom.symptom_name,
+        severity: pendingSymptom.severity || 5, // Default to medium if not specified
+        description: pendingSymptom.description,
+        triggers: pendingSymptom.triggers,
+        duration_hours: pendingSymptom.duration_hours,
+        location: pendingSymptom.location,
+      };
+      
+      // Save the symptom
+      const { error } = await addSymptom(symptomData);
+      
+      if (error) {
+        // Show error message
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: `I tried to log your ${symptomData.symptom_name} symptom, but encountered an issue: ${error.message}. Please try again or use the "Log Symptom" button on the dashboard.`,
+          isBot: true,
+          timestamp: new Date(),
+        };
+        
+        setMessages(prev => [...prev, errorMessage]);
+      } else {
+        // Show success message
+        const successMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: `I've successfully logged your ${symptomData.symptom_name} symptom with a severity of ${symptomData.severity}/10. Is there anything else you'd like to tell me about your health today?`,
+          isBot: true,
+          timestamp: new Date(),
+        };
+        
+        setMessages(prev => [...prev, successMessage]);
+      }
+    } catch (error) {
+      logger.error('Failed to save symptom', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        symptomData: pendingSymptom
+      });
+      
+      // Show error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm sorry, I encountered an error while trying to log your symptom. Please try again or use the 'Log Symptom' button on the dashboard.",
+        isBot: true,
+        timestamp: new Date(),
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setSavingSymptom(false);
+      setPendingSymptom(null);
+    }
+  };
+
+  const handleEditSymptom = () => {
+    // Navigate to the add symptom screen with pre-filled data
+    if (pendingSymptom && pendingSymptom.symptom_name) {
+      router.push({
+        pathname: '/add-symptom',
+        params: {
+          symptom: pendingSymptom.symptom_name,
+          severity: pendingSymptom.severity?.toString() || '5',
+          location: pendingSymptom.location || '',
+          duration: pendingSymptom.duration_hours?.toString() || '',
+          description: pendingSymptom.description || '',
+          triggers: pendingSymptom.triggers || '',
+        }
+      });
+      
+      // Clear the pending symptom
+      setPendingSymptom(null);
+    }
+  };
+
+  const handleCancelSymptom = () => {
+    // Add a message to acknowledge the cancellation
+    const cancelMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      text: "I've cancelled logging that symptom. Is there something else I can help you with?",
+      isBot: true,
+      timestamp: new Date(),
+    };
+    
+    setMessages(prev => [...prev, cancelMessage]);
+    
+    // Clear the pending symptom
+    setPendingSymptom(null);
   };
 
   const generateTTSResponse = async (text: string, messageId: string) => {
@@ -541,6 +776,17 @@ export default function Assistant() {
                 <Text style={styles.typingText}>Your medical AI is thinking...</Text>
               </View>
             </View>
+          )}
+
+          {/* Pending Symptom Confirmation */}
+          {pendingSymptom && (
+            <SymptomConfirmationCard
+              symptomData={pendingSymptom}
+              onConfirm={handleConfirmSymptom}
+              onEdit={handleEditSymptom}
+              onCancel={handleCancelSymptom}
+              isLoading={savingSymptom}
+            />
           )}
         </ScrollView>
 

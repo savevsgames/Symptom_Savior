@@ -1,5 +1,54 @@
 # Changelog
 
+## Version 1.2.3 - 2025-06-30
+
+### Fixed
+- Corrected field name references in user context building to match Supabase schema
+- Changed profile.blood_group to profile.blood_type
+- Changed c.diagnosed_on to c.diagnosed_at within the medical_conditions mapping
+- Changed m.dose to m.dosage within the current_medications mapping
+- Changed m.started_on to m.start_date within the current_medications mapping
+- Changed m.prescribing_doctor to m.prescribed_by within the current_medications mapping
+- Updated API documentation to reflect the corrected field names
+
+## Version 1.2.2 - 2025-06-29
+
+### Added
+- Symptom history retrieval through conversation
+- Enhanced intent detection with more patterns for better accuracy
+- Support for retrieving specific symptom history by name
+- Improved symptom extraction with additional patterns for better natural language understanding
+- Pre-filling add symptom form when editing from conversation
+
+### Changed
+- Expanded intent detection to recognize symptom history queries
+- Enhanced symptom extraction to handle more natural language variations
+- Improved confidence calculation for more accurate intent detection
+- Updated add-symptom screen to accept pre-filled parameters from conversation
+
+### Fixed
+- Corrected field name references in user context building (diagnosed_at, dosage)
+- Improved error handling for symptom history retrieval
+- Enhanced symptom name extraction with better pattern matching
+
+## Version 1.2.1 - 2025-06-28
+
+### Added
+- Agent awareness implementation to enable symptom logging via conversation
+- Intent detection system for identifying when users want to log symptoms
+- Natural language processing for extracting symptom details from conversation
+- Symptom confirmation UI for reviewing extracted symptom data before saving
+- Support for handling partial symptom information with follow-up questions
+
+### Changed
+- Enhanced AI Assistant to handle specialized intents beyond general Q&A
+- Improved conversation flow with context-aware responses
+- Updated message handling to detect and process symptom logging requests
+
+### Fixed
+- Improved error handling for symptom logging failures
+- Better feedback when symptom information is incomplete
+
 ## Version 1.2.0 - 2025-06-27 2:28am MST
 
 ### Added

@@ -1,17 +1,22 @@
 # Memory Bank
 
 ## Previous Tasks
-- Implemented Medical History screen with conditions, medications, and allergies
-- Added color-coded styling for different medical information types
-- Created profile completion tracking in Profile screen
+- Implemented Agent Awareness for symptom logging via conversation
+- Added intent detection system for identifying when users want to log symptoms
+- Created natural language processing for extracting symptom details
+- Developed symptom confirmation UI for reviewing extracted data before saving
 
 ## Current Task
-- Updated Medical History screen to use neutral styling for conditions instead of error-red colors
-- Changed Heart icon color from error red to primary blue
-- Updated condition item styling to use neutral background and border colors
-- Fixed text color to use primary text color instead of error color
+- Fixed field name references in user context building to match Supabase schema
+- Changed profile.blood_group to profile.blood_type
+- Changed c.diagnosed_on to c.diagnosed_at within the medical_conditions mapping
+- Changed m.dose to m.dosage within the current_medications mapping
+- Changed m.started_on to m.start_date within the current_medications mapping
+- Changed m.prescribing_doctor to m.prescribed_by within the current_medications mapping
+- Updated API documentation to reflect the corrected field names
 
 ## Next Tasks
-- Continue debugging profile functionality to ensure proper data flow
-- Prepare for conversational AI implementation with real-time chat
-- Ensure profile data is properly used as context for AI assistant
+- Test the symptom logging intent detection with various phrasings
+- Enhance the symptom extraction with more patterns and edge cases
+- Implement additional agent actions like treatment logging
+- Add support for more complex conversation flows with follow-up questions
