@@ -1,17 +1,16 @@
 # Memory Bank
 
 ## Previous Tasks
-- Implemented Medical History screen with conditions, medications, and allergies
-- Added color-coded styling for different medical information types
-- Created profile completion tracking in Profile screen
+- Troubleshooting medical consultation API integration
+- Investigating why user's medical profile wasn't being utilized in AI responses
 
 ## Current Task
-- Updated Medical History screen to use neutral styling for conditions instead of error-red colors
-- Changed Heart icon color from error red to primary blue
-- Updated condition item styling to use neutral background and border colors
-- Fixed text color to use primary text color instead of error color
+- Reviewing Agent Awareness plan for implementing symptom logging via conversation
+- Implementing Phase 1 of agent awareness with intent detection and symptom extraction
+- Creating UI components for symptom confirmation from conversation
 
 ## Next Tasks
-- Continue debugging profile functionality to ensure proper data flow
-- Prepare for conversational AI implementation with real-time chat
-- Ensure profile data is properly used as context for AI assistant
+- Test the symptom logging intent detection with various phrasings
+- Enhance the symptom extraction with more patterns and edge cases
+- Implement Phase 2 with improved conversation flow and follow-up questions
+- Add support for retrieving symptom history through conversation

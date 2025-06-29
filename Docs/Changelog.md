@@ -1,5 +1,23 @@
 # Changelog
 
+## Version 1.2.1 - 2025-06-28
+
+### Added
+- Agent awareness implementation to enable symptom logging via conversation
+- Intent detection system for identifying when users want to log symptoms
+- Natural language processing for extracting symptom details from conversation
+- Symptom confirmation UI for reviewing extracted symptom data before saving
+- Support for handling partial symptom information with follow-up questions
+
+### Changed
+- Enhanced AI Assistant to handle specialized intents beyond general Q&A
+- Improved conversation flow with context-aware responses
+- Updated message handling to detect and process symptom logging requests
+
+### Fixed
+- Improved error handling for symptom logging failures
+- Better feedback when symptom information is incomplete
+
 ## Version 1.2.0 - 2025-06-27 2:28am MST
 
 ### Added
