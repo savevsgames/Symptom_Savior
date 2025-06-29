@@ -13,7 +13,7 @@ import { ttsService } from '@/lib/tts';
 import { Config } from '@/lib/config';
 import { logger } from '@/utils/logger';
 import { BaseButton } from '@/components/ui';
-import { detectSymptomLoggingIntent, type IntentDetectionResult, type ExtractedSymptomData } from '@/lib/intent-detection';
+import { detectSymptomLoggingIntent, type IntentDetectionResult, type ExtractedSymptomData, formatSymptomData } from '@/lib/intent-detection';
 import { SymptomConfirmationCard } from '@/components/symptom/SymptomConfirmationCard';
 
 interface Message {
@@ -51,7 +51,7 @@ export default function Assistant() {
 
   // Get user profile and health data
   const { profile, conditions, medications, allergies } = useProfile();
-  const { symptoms, treatments, doctorVisits, addSymptom } = useSymptoms();
+  const { symptoms, treatments, doctorVisits, addSymptom, getSymptomsByName } = useSymptoms();
 
   const quickPrompts = [
     "How do I log a new symptom?",
@@ -84,7 +84,7 @@ export default function Assistant() {
         full_name: profile.full_name,
         age: profile.date_of_birth ? calculateAge(profile.date_of_birth) : null,
         gender: profile.gender,
-        blood_group: profile.blood_group,
+        blood_group: profile.blood_type,
         height_cm: profile.height_cm,
         weight_kg: profile.weight_kg,
       },
@@ -177,6 +177,12 @@ export default function Assistant() {
           setIsTyping(false);
           return;
         }
+      }
+      
+      // Check for symptom history intent
+      if (intentResult.intent === 'symptom_history') {
+        await handleSymptomHistoryRequest(intentResult.symptomName);
+        return;
       }
 
       // Build context for personalized responses
@@ -297,6 +303,93 @@ export default function Assistant() {
         emergencyDetected: detectEmergency(textToSend).isEmergency,
       };
 
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleSymptomHistoryRequest = async (symptomName?: string) => {
+    try {
+      let historyResponse: Message;
+      
+      if (symptomName) {
+        // Get history for a specific symptom
+        const { data, error } = await getSymptomsByName(symptomName);
+        
+        if (error) {
+          throw error;
+        }
+        
+        if (data && data.length > 0) {
+          const count = data.length;
+          const latestDate = new Date(data[0].created_at).toLocaleDateString();
+          const avgSeverity = (data.reduce((sum, s) => sum + s.severity, 0) / count).toFixed(1);
+          
+          historyResponse = {
+            id: (Date.now() + 1).toString(),
+            text: `I found ${count} records of "${symptomName}" in your history. The most recent was on ${latestDate} with an average severity of ${avgSeverity}/10.`,
+            isBot: true,
+            timestamp: new Date(),
+          };
+        } else {
+          historyResponse = {
+            id: (Date.now() + 1).toString(),
+            text: `I couldn't find any records for "${symptomName}" in your symptom history. Would you like to log this symptom now?`,
+            isBot: true,
+            timestamp: new Date(),
+          };
+        }
+      } else {
+        // Get general symptom history
+        if (symptoms.length === 0) {
+          historyResponse = {
+            id: (Date.now() + 1).toString(),
+            text: "You haven't logged any symptoms yet. Would you like to log a symptom now?",
+            isBot: true,
+            timestamp: new Date(),
+          };
+        } else {
+          const recentSymptoms = symptoms.slice(0, 5);
+          const totalCount = symptoms.length;
+          
+          let summaryText = `You've logged ${totalCount} symptom${totalCount !== 1 ? 's' : ''} in total. `;
+          summaryText += `Your most recent symptoms are: `;
+          
+          recentSymptoms.forEach((s, index) => {
+            summaryText += `${s.symptom} (severity: ${s.severity}/10)`;
+            if (index < recentSymptoms.length - 1) {
+              summaryText += index === recentSymptoms.length - 2 ? ' and ' : ', ';
+            }
+          });
+          
+          historyResponse = {
+            id: (Date.now() + 1).toString(),
+            text: summaryText,
+            isBot: true,
+            timestamp: new Date(),
+          };
+        }
+      }
+      
+      setMessages(prev => [...prev, historyResponse]);
+    } catch (error) {
+      logger.error('Failed to retrieve symptom history', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error,
+        symptomName
+      });
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm sorry, I had trouble retrieving your symptom history. Please try again later or check the Symptoms tab to view your history.",
+        isBot: true,
+        timestamp: new Date(),
+      };
+      
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsTyping(false);

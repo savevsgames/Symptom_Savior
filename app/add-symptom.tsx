@@ -1,13 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Plus, X, Clock, MapPin } from 'lucide-react-native';
 import { BaseButton, BaseTextInput, BaseCard } from '@/components/ui';
 import { useSymptoms } from '@/hooks/useSymptoms';
 import { theme } from '@/lib/theme';
 
 export default function AddSymptom() {
+  const params = useLocalSearchParams<{
+    symptom?: string;
+    severity?: string;
+    description?: string;
+    triggers?: string;
+    duration?: string;
+    location?: string;
+  }>();
+
   const [selectedSymptom, setSelectedSymptom] = useState('');
   const [customSymptom, setCustomSymptom] = useState('');
   const [severity, setSeverity] = useState(1);
@@ -18,6 +27,31 @@ export default function AddSymptom() {
   const [saving, setSaving] = useState(false);
   
   const { addSymptom } = useSymptoms();
+
+  // Initialize form with params if provided (from AI assistant)
+  useEffect(() => {
+    if (params) {
+      if (params.symptom) {
+        if (commonSymptoms.includes(params.symptom)) {
+          setSelectedSymptom(params.symptom);
+        } else {
+          setCustomSymptom(params.symptom);
+        }
+      }
+      
+      if (params.severity) {
+        const severityValue = parseInt(params.severity, 10);
+        if (!isNaN(severityValue) && severityValue >= 1 && severityValue <= 10) {
+          setSeverity(severityValue);
+        }
+      }
+      
+      if (params.description) setDescription(params.description);
+      if (params.triggers) setTriggers(params.triggers);
+      if (params.duration) setDuration(params.duration);
+      if (params.location) setLocation(params.location);
+    }
+  }, [params]);
 
   const commonSymptoms = [
     'Headache', 'Fatigue', 'Nausea', 'Dizziness', 'Joint Pain',

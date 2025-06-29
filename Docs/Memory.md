@@ -1,16 +1,19 @@
 # Memory Bank
 
 ## Previous Tasks
-- Troubleshooting medical consultation API integration
-- Investigating why user's medical profile wasn't being utilized in AI responses
+- Implemented Agent Awareness for symptom logging via conversation
+- Added intent detection system for identifying when users want to log symptoms
+- Created natural language processing for extracting symptom details
+- Developed symptom confirmation UI for reviewing extracted data before saving
 
 ## Current Task
-- Reviewing Agent Awareness plan for implementing symptom logging via conversation
-- Implementing Phase 1 of agent awareness with intent detection and symptom extraction
-- Creating UI components for symptom confirmation from conversation
+- Enhancing the agent awareness implementation with symptom history retrieval
+- Improving intent detection with more patterns and edge cases
+- Adding support for retrieving symptom history through conversation
+- Ensuring the symptom logging flow is complete and user-friendly
 
 ## Next Tasks
 - Test the symptom logging intent detection with various phrasings
 - Enhance the symptom extraction with more patterns and edge cases
-- Implement Phase 2 with improved conversation flow and follow-up questions
-- Add support for retrieving symptom history through conversation
+- Implement additional agent actions like treatment logging
+- Add support for more complex conversation flows with follow-up questions

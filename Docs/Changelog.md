@@ -1,5 +1,25 @@
 # Changelog
 
+## Version 1.2.2 - 2025-06-29
+
+### Added
+- Symptom history retrieval through conversation
+- Enhanced intent detection with more patterns for better accuracy
+- Support for retrieving specific symptom history by name
+- Improved symptom extraction with additional patterns for better natural language understanding
+- Pre-filling add symptom form when editing from conversation
+
+### Changed
+- Expanded intent detection to recognize symptom history queries
+- Enhanced symptom extraction to handle more natural language variations
+- Improved confidence calculation for more accurate intent detection
+- Updated add-symptom screen to accept pre-filled parameters from conversation
+
+### Fixed
+- Corrected field name references in user context building (diagnosed_at, dosage)
+- Improved error handling for symptom history retrieval
+- Enhanced symptom name extraction with better pattern matching
+
 ## Version 1.2.1 - 2025-06-28
 
 ### Added

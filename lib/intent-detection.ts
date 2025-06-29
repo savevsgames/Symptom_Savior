@@ -11,9 +11,10 @@ export interface ExtractedSymptomData {
 }
 
 export interface IntentDetectionResult {
-  intent: 'symptom_logging' | 'symptom_query' | 'general_question' | 'unknown';
+  intent: 'symptom_logging' | 'symptom_query' | 'symptom_history' | 'general_question' | 'unknown';
   confidence: number;
   extractedData?: ExtractedSymptomData;
+  symptomName?: string; // For symptom history queries
 }
 
 /**
@@ -34,6 +35,8 @@ export function detectSymptomLoggingIntent(query: string): IntentDetectionResult
     /i('m| am) feeling/i,
     /i('ve| have) got (a|an)/i,
     /track (my|this) (.*?)/i,
+    /note (down|that) (i|my) (have|has|am experiencing)/i,
+    /please (record|log|note|save) (that|this)/i,
   ];
   
   // Check for direct matches
@@ -51,6 +54,34 @@ export function detectSymptomLoggingIntent(query: string): IntentDetectionResult
         intent: 'symptom_logging',
         confidence,
         extractedData
+      };
+    }
+  }
+  
+  // Symptom history patterns
+  const symptomHistoryPatterns = [
+    /show (me|my) (.*?) (history|log|records)/i,
+    /view (my|all) (.*?) (symptoms|entries)/i,
+    /how many times (have|has) i (had|experienced|logged) (.*?)/i,
+    /when (did|was) (my|the) last (.*?)/i,
+    /list (all|my|recent) (.*?) (symptoms|episodes|occurrences)/i,
+  ];
+  
+  for (const pattern of symptomHistoryPatterns) {
+    const match = normalizedQuery.match(pattern);
+    if (match) {
+      // Try to extract the symptom name from the pattern
+      let symptomName = '';
+      if (match[2] && !['me', 'my', 'all'].includes(match[2].trim())) {
+        symptomName = match[2].trim();
+      } else if (match[3] && !['history', 'log', 'records', 'symptoms', 'entries'].includes(match[3].trim())) {
+        symptomName = match[3].trim();
+      }
+      
+      return {
+        intent: 'symptom_history',
+        confidence: 0.8,
+        symptomName: symptomName || undefined
       };
     }
   }
@@ -109,6 +140,11 @@ export function extractSymptomDetails(query: string): ExtractedSymptomData {
     { pattern: /i have (a|an) ([a-z\s]+)/i, group: 2 },
     { pattern: /i('m| am) feeling ([a-z\s]+)/i, group: 2 },
     { pattern: /i('ve| have) got (a|an) ([a-z\s]+)/i, group: 3 },
+    { pattern: /record (my|a|an) ([a-z\s]+)/i, group: 2 },
+    { pattern: /add (my|a|an) ([a-z\s]+)/i, group: 2 },
+    { pattern: /save (my|a|an) ([a-z\s]+)/i, group: 2 },
+    { pattern: /note (my|a|an) ([a-z\s]+)/i, group: 2 },
+    { pattern: /with (a|an) ([a-z\s]+)/i, group: 2 },
   ];
   
   totalPoints += 3; // Symptom name is important
@@ -128,6 +164,24 @@ export function extractSymptomDetails(query: string): ExtractedSymptomData {
     }
   }
   
+  // If no symptom name found yet, try to find common symptoms directly
+  if (!result.symptom_name) {
+    const commonSymptoms = [
+      'headache', 'migraine', 'nausea', 'fever', 'cough', 'sore throat',
+      'back pain', 'stomach ache', 'dizziness', 'fatigue', 'chest pain',
+      'shortness of breath', 'rash', 'joint pain', 'muscle pain', 'anxiety',
+      'depression', 'insomnia', 'diarrhea', 'constipation', 'vomiting'
+    ];
+    
+    for (const symptom of commonSymptoms) {
+      if (query.toLowerCase().includes(symptom)) {
+        result.symptom_name = symptom;
+        confidencePoints += 2; // Lower confidence than pattern match
+        break;
+      }
+    }
+  }
+  
   // Extract severity
   const severityPatterns = [
     { pattern: /severity (of|is) (\d+)/i, group: 2 },
@@ -135,6 +189,8 @@ export function extractSymptomDetails(query: string): ExtractedSymptomData {
     { pattern: /(\d+) out of 10/i, group: 1 },
     { pattern: /scale of (\d+)/i, group: 1 },
     { pattern: /(\d+) on a scale/i, group: 1 },
+    { pattern: /pain (?:level|score) (?:of|is) (\d+)/i, group: 1 },
+    { pattern: /intensity (?:of|is) (\d+)/i, group: 1 },
   ];
   
   totalPoints += 2; // Severity is somewhat important
@@ -184,6 +240,7 @@ export function extractSymptomDetails(query: string): ExtractedSymptomData {
     { pattern: /location is ([a-z\s]+)/i, group: 1 },
     { pattern: /located (in|on) my ([a-z\s]+)/i, group: 2 },
     { pattern: /my ([a-z\s]+) (hurts|aches|is sore)/i, group: 1 },
+    { pattern: /pain in (?:my|the) ([a-z\s]+)/i, group: 1 },
   ];
   
   totalPoints += 1; // Location is less important
@@ -203,6 +260,8 @@ export function extractSymptomDetails(query: string): ExtractedSymptomData {
     { pattern: /for (\d+) weeks?/i, group: 1, unit: 168 },
     { pattern: /since (\d+) hours? ago/i, group: 1, unit: 1 },
     { pattern: /started (\d+) hours? ago/i, group: 1, unit: 1 },
+    { pattern: /last (\d+) hours?/i, group: 1, unit: 1 },
+    { pattern: /past (\d+) hours?/i, group: 1, unit: 1 },
   ];
   
   totalPoints += 1; // Duration is less important
@@ -222,6 +281,9 @@ export function extractSymptomDetails(query: string): ExtractedSymptomData {
     { pattern: /after ([a-z\s,]+)/i, group: 1 },
     { pattern: /when i ([a-z\s,]+)/i, group: 1 },
     { pattern: /happens (when|after) ([a-z\s,]+)/i, group: 2 },
+    { pattern: /caused by ([a-z\s,]+)/i, group: 1 },
+    { pattern: /due to ([a-z\s,]+)/i, group: 1 },
+    { pattern: /because of ([a-z\s,]+)/i, group: 1 },
   ];
   
   totalPoints += 1; // Triggers are less important
@@ -239,6 +301,8 @@ export function extractSymptomDetails(query: string): ExtractedSymptomData {
     { pattern: /it feels like ([a-z\s,\.]+)/i, group: 1 },
     { pattern: /it's like ([a-z\s,\.]+)/i, group: 1 },
     { pattern: /described as ([a-z\s,\.]+)/i, group: 1 },
+    { pattern: /feels like ([a-z\s,\.]+)/i, group: 1 },
+    { pattern: /sensation of ([a-z\s,\.]+)/i, group: 1 },
   ];
   
   totalPoints += 1; // Description is less important
@@ -275,4 +339,46 @@ function calculateConfidence(data: ExtractedSymptomData): number {
   if (data.description) confidence += 0.05;
   
   return Math.min(confidence, 1.0); // Cap at 1.0
+}
+
+/**
+ * Format extracted symptom data into a human-readable string
+ */
+export function formatSymptomData(data: ExtractedSymptomData): string {
+  const parts = [];
+  
+  if (data.symptom_name) {
+    parts.push(`Symptom: ${data.symptom_name}`);
+  }
+  
+  if (data.severity) {
+    parts.push(`Severity: ${data.severity}/10`);
+  }
+  
+  if (data.location) {
+    parts.push(`Location: ${data.location}`);
+  }
+  
+  if (data.duration_hours) {
+    const days = Math.floor(data.duration_hours / 24);
+    const hours = data.duration_hours % 24;
+    
+    if (days > 0 && hours > 0) {
+      parts.push(`Duration: ${days} day${days !== 1 ? 's' : ''} and ${hours} hour${hours !== 1 ? 's' : ''}`);
+    } else if (days > 0) {
+      parts.push(`Duration: ${days} day${days !== 1 ? 's' : ''}`);
+    } else {
+      parts.push(`Duration: ${hours} hour${hours !== 1 ? 's' : ''}`);
+    }
+  }
+  
+  if (data.triggers) {
+    parts.push(`Triggers: ${data.triggers}`);
+  }
+  
+  if (data.description) {
+    parts.push(`Description: ${data.description}`);
+  }
+  
+  return parts.join('\n');
 }
