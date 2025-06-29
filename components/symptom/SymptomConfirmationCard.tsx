@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { BaseButton, BaseCard } from '@/components/ui';
 import { ExtractedSymptomData } from '@/lib/intent-detection';
 import { theme } from '@/lib/theme';
-import { X, Check, Edit2 } from 'lucide-react-native';
+import { X, Check, CreditCard as Edit2 } from 'lucide-react-native';
 
 interface SymptomConfirmationCardProps {
   symptomData: ExtractedSymptomData;
