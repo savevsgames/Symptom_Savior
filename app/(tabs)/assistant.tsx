@@ -760,17 +760,6 @@ export default function Assistant() {
             </View>
           ))}
 
-          {/* Pending Symptom Confirmation */}
-          {pendingSymptom && (
-            <SymptomConfirmationCard
-              symptomData={pendingSymptom}
-              onConfirm={handleConfirmSymptom}
-              onEdit={handleEditSymptom}
-              onCancel={handleCancelSymptom}
-              isLoading={savingSymptom}
-            />
-          )}
-
           {isTyping && (
             <View style={[styles.messageWrapper, styles.botMessageWrapper]}>
               <View style={styles.messageHeader}>
@@ -787,6 +776,17 @@ export default function Assistant() {
                 <Text style={styles.typingText}>Your medical AI is thinking...</Text>
               </View>
             </View>
+          )}
+
+          {/* Pending Symptom Confirmation */}
+          {pendingSymptom && (
+            <SymptomConfirmationCard
+              symptomData={pendingSymptom}
+              onConfirm={handleConfirmSymptom}
+              onEdit={handleEditSymptom}
+              onCancel={handleCancelSymptom}
+              isLoading={savingSymptom}
+            />
           )}
         </ScrollView>
 

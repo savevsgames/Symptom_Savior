@@ -31,13 +31,34 @@ Endpoint for AI-powered medical consultations with TxAgent.
       "full_name": "John Doe",
       "age": 35,
       "gender": "male",
-      "blood_group": "A+",
+      "blood_type": "A+",
       "height_cm": 180,
       "weight_kg": 75
     },
-    "medical_conditions": [...],
-    "current_medications": [...],
-    "allergies": [...],
+    "medical_conditions": [
+      {
+        "name": "Hypertension",
+        "severity": 5,
+        "diagnosed_at": "2023-01-15",
+        "notes": "Controlled with medication"
+      }
+    ],
+    "current_medications": [
+      {
+        "name": "Lisinopril",
+        "dosage": "10mg",
+        "frequency": "Once daily",
+        "start_date": "2023-01-20",
+        "prescribed_by": "Dr. Smith"
+      }
+    ],
+    "allergies": [
+      {
+        "allergen": "Penicillin",
+        "reaction": "Rash",
+        "severity": 7
+      }
+    ],
     "recent_symptoms": [...],
     "recent_visits": [...]
   },
@@ -289,3 +310,4 @@ Common error codes:
 - `NOT_FOUND`: Requested resource not found
 - `SERVICE_UNAVAILABLE`: Backend service unavailable
 - `CONSULTATION_FAILED`: Error during medical consultation
+```
