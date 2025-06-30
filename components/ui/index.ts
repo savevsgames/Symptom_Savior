@@ -26,3 +26,5 @@ export type { VoiceInputProps } from './VoiceInput';
 
 export { VoiceRecordButton } from './VoiceRecordButton';
 export type { VoiceRecordButtonProps } from './VoiceRecordButton';
+
+export { BoltBadge } from './BoltBadge';
