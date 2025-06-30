@@ -92,7 +92,7 @@ export function BoltBadge({
           ]}
         >
           <Image
-            source={{ uri: 'https://storage.bolt.army/black_circle_360x360.png' }}
+            source={require('@/assets/images/icon.png')}
             style={styles.badgeImage}
             resizeMode="contain"
           />
