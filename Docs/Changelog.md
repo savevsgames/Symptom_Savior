@@ -1,5 +1,16 @@
 # Changelog
 
+## Version 1.2.4 - 2025-06-30
+
+### Added
+- Added metadata field to user_symptoms table in database schema
+- Added additional indexes for user_symptoms table including symptom_name index
+- Added comprehensive indexing for better query performance
+
+### Fixed
+- Fixed blood_type enum values to use proper dash character instead of hyphen
+- Updated migration file to be consistent with the schema in SUPABASE_CONFIG.md
+
 ## Version 1.2.3 - 2025-06-30
 
 ### Fixed
