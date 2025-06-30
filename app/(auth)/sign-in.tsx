@@ -38,7 +38,7 @@ export default function SignIn() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
         style={styles.keyboardAvoidingView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
       >
         <View style={styles.content}>
           <View style={styles.header}>
