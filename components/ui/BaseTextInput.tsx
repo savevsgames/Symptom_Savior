@@ -192,6 +192,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text.primary,
     paddingTop: 0,
     paddingBottom: 0,
+    height: '100%',
   },
   
   inputFloating: {
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.medium,
     fontSize: theme.typography.fontSize.base,
     color: theme.colors.text.secondary,
-    backgroundColor: theme.colors.background.primary,
+    backgroundColor: 'transparent',
     paddingHorizontal: 4,
     zIndex: 1,
   },

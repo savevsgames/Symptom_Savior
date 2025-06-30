@@ -68,8 +68,6 @@ export default function AddTreatment() {
   ];
 
   const handleSave = async () => {
-    const symptomName = selectedType || name;
-    
     if (!selectedType) {
       Alert.alert('Missing Information', 'Please select a treatment type.');
       return;
@@ -220,14 +218,17 @@ export default function AddTreatment() {
               onChangeText={setDuration}
             />
 
-            <BaseTextInput
-              label="Additional Notes (Optional)"
-              placeholder="Any additional details about this treatment..."
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              style={styles.descriptionInput}
-            />
+            <View style={styles.notesContainer}>
+              <Text style={styles.notesLabel}>Additional Notes (Optional)</Text>
+              <BaseTextInput
+                placeholder="Any additional details about this treatment..."
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                style={styles.descriptionInput}
+                label=""
+              />
+            </View>
           </BaseCard>
         )}
 
@@ -413,8 +414,20 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.lineHeight.tight * theme.typography.fontSize.xs,
   },
   
+  notesContainer: {
+    marginTop: theme.spacing.md,
+  },
+  
+  notesLabel: {
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.text.secondary,
+    marginBottom: theme.spacing.sm,
+  },
+  
   descriptionInput: {
-    minHeight: 80,
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   
   recommendationContainer: {
