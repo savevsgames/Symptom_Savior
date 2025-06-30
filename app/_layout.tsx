@@ -11,6 +11,8 @@ import {
 } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { BoltBadge } from '@/components/ui/BoltBadge';
+import { Platform, View } from 'react-native';
 
 // Disable SSR for client-side only features
 export const unstable_settings = {
@@ -49,6 +51,9 @@ export default function RootLayout() {
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
+      
+      {/* Only show the Bolt badge on web platform */}
+      {Platform.OS === 'web' && <BoltBadge size="medium" position="top-right" />}
     </AuthProvider>
   );
 }
