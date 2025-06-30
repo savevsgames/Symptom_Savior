@@ -25,6 +25,7 @@ export default function AddTreatment() {
   const [description, setDescription] = useState('');
   const [doctorRecommended, setDoctorRecommended] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   
   const { addTreatment } = useSymptoms();
 
@@ -67,6 +68,8 @@ export default function AddTreatment() {
   ];
 
   const handleSave = async () => {
+    const symptomName = selectedType || name;
+    
     if (!selectedType) {
       Alert.alert('Missing Information', 'Please select a treatment type.');
       return;
@@ -78,6 +81,7 @@ export default function AddTreatment() {
     }
 
     setSaving(true);
+    setSaveSuccess(false);
     
     try {
       const treatmentData = {
@@ -96,11 +100,17 @@ export default function AddTreatment() {
         return;
       }
 
-      Alert.alert(
-        'Treatment Added',
-        `Your ${selectedType} "${name}" has been recorded successfully.`,
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      // Show success state
+      setSaveSuccess(true);
+      
+      // Show success message with a slight delay to ensure the success UI is visible
+      setTimeout(() => {
+        Alert.alert(
+          'Treatment Added',
+          `Your ${selectedType} "${name}" has been recorded successfully.`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+      }, 500);
     } catch (error) {
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
@@ -124,6 +134,13 @@ export default function AddTreatment() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Success Banner - Shows only after successful save */}
+        {saveSuccess && (
+          <View style={styles.successBanner}>
+            <Text style={styles.successText}>Treatment saved successfully!</Text>
+          </View>
+        )}
+        
         {/* Treatment Type Selection */}
         <BaseCard style={styles.section}>
           <Text style={styles.sectionTitle}>What type of treatment is this?</Text>
@@ -141,7 +158,7 @@ export default function AddTreatment() {
                 onPress={() => setSelectedType(option.type)}
               >
                 <View style={[styles.typeIcon, { backgroundColor: option.color }]}>
-                  <option.icon size={24} color={theme.colors.text.inverse} strokeWidth={2} />
+                  <option.icon size={24} color="#FFFFFF" strokeWidth={2} />
                 </View>
                 <Text style={[
                   styles.typeLabel,
@@ -264,7 +281,7 @@ export default function AddTreatment() {
       {/* Save Button */}
       <View style={styles.saveContainer}>
         <BaseButton
-          title="Save Treatment"
+          title={saving ? "Saving Treatment..." : "Save Treatment"}
           onPress={handleSave}
           loading={saving}
           disabled={saving || !selectedType || !name.trim()}
@@ -312,6 +329,26 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: theme.spacing['2xl'],
+  },
+  
+  successBanner: {
+    backgroundColor: theme.colors.success[100],
+    borderWidth: 1,
+    borderColor: theme.colors.success[300],
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
+  successText: {
+    fontFamily: theme.typography.fontFamily.medium,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.success[700],
+    textAlign: 'center',
   },
   
   section: {
